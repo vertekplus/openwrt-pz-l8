@@ -78,7 +78,7 @@
 
 ## 安装
 
-> **注意**：如果设备仍在运行原厂固件，必须先刷入 `factory.ubi` 镜像。刷写方法请参考 [PR #20681](https://github.com/openwrt/openwrt/pull/20681) 的安装指南。安装 OpenWrt 后，后续升级可使用 `sysupgrade.bin` 镜像。
+> **注意**：如果设备仍在运行原厂固件，必须先刷入 `factory.ubi` 或 `initramfs.itb` 镜像。刷写方法请参考 [PR #20681](https://github.com/openwrt/openwrt/pull/20681) 的安装指南。安装 OpenWrt 后，后续升级可使用 `sysupgrade.bin` 镜像。
 
 ### 前提条件
 
