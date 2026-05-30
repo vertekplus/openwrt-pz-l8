@@ -1,0 +1,19 @@
+{
+  "code": 200,
+  "data": {
+    "description": "",
+    "html": "<html><head><meta name=\"color-scheme\" content=\"light dark\"></head><body><pre style=\"word-wrap: break-word; white-space: pre-wrap;\">{\n  \"sha\": \"be772804b069547bb55aa904457e6f184b35addf\",\n  \"url\": \"https://api.github.com/repos/sqliuchang/openwrt-redmi-ax3000/git/trees/be772804b069547bb55aa904457e6f184b35addf\",\n  \"tree\": [\n    {\n      \"path\": \"workflows\",\n      \"mode\": \"040000\",\n      \"type\": \"tree\",\n      \"sha\": \"aa69edbf4d449a23980dacf5b63ba66cf6503190\",\n      \"url\": \"https://api.github.com/repos/sqliuchang/openwrt-redmi-ax3000/git/trees/aa69edbf4d449a23980dacf5b63ba66cf6503190\"\n    }\n  ],\n  \"truncated\": false\n}\n</pre></body></html>",
+    "publishedTime": "Fri, 10 Oct 2025 13:39:56 GMT",
+    "title": "",
+    "url": "https://api.github.com/repos/sqliuchang/openwrt-redmi-ax3000/git/trees/be772804b069547bb55aa904457e6f184b35addf",
+    "usage": {
+      "tokens": 234
+    }
+  },
+  "meta": {
+    "usage": {
+      "tokens": 234
+    }
+  },
+  "status": 20000
+}

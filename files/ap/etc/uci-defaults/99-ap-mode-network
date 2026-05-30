@@ -1,0 +1,32 @@
+#!/bin/sh
+# uci-defaults runs once on first boot, then self-deletes.
+# On factory flash: overlay is empty -> script runs -> AP config applied.
+# On sysupgrade (no -n): overlay preserved -> script already deleted -> user config untouched.
+
+# Bridge all ports (lan1, lan2, lan3, wan)
+uci -q delete network.device
+uci set network.device='device'
+uci set network.device.name='br-lan'
+uci set network.device.type='bridge'
+uci add_list network.device.ports='lan1'
+uci add_list network.device.ports='lan2'
+uci add_list network.device.ports='lan3'
+uci add_list network.device.ports='wan'
+
+# LAN: DHCP client
+uci set network.lan='interface'
+uci set network.lan.device='br-lan'
+uci set network.lan.proto='dhcp'
+
+# LAN static fallback
+uci set network.lan_static='interface'
+uci set network.lan_static.device='br-lan'
+uci set network.lan_static.proto='static'
+uci set network.lan_static.ipaddr='192.168.10.1'
+uci set network.lan_static.netmask='255.255.255.0'
+
+# IPv6: accept RA on br-lan (AP mode)
+uci set network.lan.ipv6='auto'
+
+uci commit network
+exit 0

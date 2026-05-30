@@ -1,0 +1,18 @@
+{
+  "code": 200,
+  "data": {
+    "description": "",
+    "html": "<html><head><meta name=\"color-scheme\" content=\"light dark\"></head><body><pre style=\"word-wrap: break-word; white-space: pre-wrap;\">include $(TOPDIR)/rules.mk\ninclude $(INCLUDE_DIR)/image.mk\n\nifeq ($(SUBTARGET),arm)\n  KERNEL_LOADADDR := 0x41208000\n  DTS_CPPFLAGS-y += -D__ARM32__\nelse\n  KERNEL_LOADADDR := 0x41080000\n  DTS_CPPFLAGS-y += -D__AARCH64__\nendif\n\nDTS_CPPFLAGS-y += -D__IPQ_MEM_PROFILE_256_MB__\nDTS_CPPFLAGS-$(CONFIG_ATH11K_MEM_PROFILE_256M) += -DCONFIG_ATH11K_MEM_PROFILE_256M\n\ndefine Device/Default\n  PROFILES := Default\n  DEVICE_DTS_DIR := ../dts\n  DEVICE_DTS = $$(SOC)-$(lastword $(subst _, ,$(1)))\n  DTS_CPPFLAGS += $(DTS_CPPFLAGS-y)\n  IMAGES := sysupgrade.tar\n  IMAGE/sysupgrade.tar := sysupgrade-tar | append-metadata\nendef\n\ndefine Device/FitImage\n  KERNEL_SUFFIX := -fit-uImage.itb\n  KERNEL = kernel-bin | lzma | fit lzma $$(KDIR)/image-$$(DEVICE_DTS).dtb\n  KERNEL_NAME := Image\nendef\n\ndefine Device/UbiFit\n  KERNEL_IN_UBI := 1\n  IMAGES := nand-factory.ubi nand-sysupgrade.bin\n  IMAGE/nand-factory.ubi := append-ubi\n  IMAGE/nand-sysupgrade.bin := sysupgrade-tar | append-metadata\nendef\n\ndefine Device/cmcc_pz-l8\n  $(call Device/FitImage)\n  $(call Device/UbiFit)\n  SOC := ipq5000\n  DEVICE_VENDOR := CMCC\n  DEVICE_MODEL := PZ-L8\n  BLOCKSIZE := 128k\n  PAGESIZE := 2048\n  DEVICE_DTS_CONFIG := config@mp02.1\n  IMAGES := nand-factory.ubi nand-sysupgrade.bin\n  DEVICE_PACKAGES := \\\n\tATH11K_MEM_PROFILE_256M \\\n\tath11k-firmware-ipq5018 \\\n\tath11k-firmware-qcn6122 \\\n\tipq-wifi-cmcc_pz-l8\nendef\nTARGET_DEVICES += cmcc_pz-l8\n\ndefine Device/cmcc_rax3000q\n  $(call Device/FitImage)\n  $(call Device/UbiFit)\n  SOC := ipq5000\n  DEVICE_VENDOR := CMCC\n  DEVICE_MODEL := RAX3000Q\n  BLOCKSIZE := 128k\n  PAGESIZE := 2048\n  DEVICE_DTS_CONFIG := config@mp02.1\n  IMAGES := nand-factory.ubi\n  DEVICE_PACKAGES := \\\n\tath11k-firmware-ipq5018 \\\n\tath11k-firmware-qcn6122 \\\n\tipq-wifi-cmcc_rax3000q\nendef\nTARGET_DEVICES += cmcc_rax3000q\n\ndefine Device/redmi_ax3000\n  $(call Device/FitImage)\n  $(call Device/UbiFit)\n  SOC := ipq5000\n  DEVICE_VENDOR := Redmi\n  DEVICE_MODEL := AX3000\n  DEVICE_ALT0_VENDOR := Xiaomi\n  DEVICE_ALT0_MODEL := CR880x\n  DEVICE_ALT0_VARIANT := (M81 version)\n  DEVICE_ALT1_VENDOR := Xiaomi\n  DEVICE_ALT1_MODEL := CR880x\n  DEVICE_ALT1_VARIANT := (M79 version)\n  BLOCKSIZE := 128k\n  PAGESIZE := 2048\n  DEVICE_DTS_CONFIG := config@mp02.1\n  IMAGES := nand-factory.ubi\n  DEVICE_PACKAGES := \\\n\tATH11K_MEM_PROFILE_256M \\\n\tath11k-firmware-ipq5018 \\\n\tath11k-firmware-qcn6122 \\\n\tipq-wifi-redmi_ax3000\nendef\nTARGET_DEVICES += redmi_ax3000\n\ndefine Device/xiaomi_cr881x\n  $(call Device/FitImage)\n  $(call Device/UbiFit)\n  SOC := ipq5018\n  DEVICE_VENDOR := Xiaomi\n  DEVICE_MODEL := CR881x\n  BLOCKSIZE := 128k\n  PAGESIZE := 2048\n  DEVICE_DTS_CONFIG := config@mp03.3\n  IMAGES := nand-factory.ubi\n  DEVICE_PACKAGES := \\\n\tATH11K_MEM_PROFILE_256M \\\n\tath11k-firmware-ipq5018 \\\n\tath11k-firmware-qcn6122 \\\n\tipq-wifi-xiaomi_cr881x\nendef\nTARGET_DEVICES += xiaomi_cr881x\n\n$(eval $(call BuildImage))\n</pre></body></html>",
+    "title": "",
+    "url": "https://raw.githubusercontent.com/sqliuchang/openwrt-redmi-ax3000/ipq50xx-qsdk-kernel-5.4-openwrt-21.02-qsdk-11.5.05.841.1029/target/linux/ipq50xx/image/Makefile",
+    "usage": {
+      "tokens": 1032
+    }
+  },
+  "meta": {
+    "usage": {
+      "tokens": 1032
+    }
+  },
+  "status": 20000
+}

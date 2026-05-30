@@ -1,0 +1,19 @@
+{
+  "code": 200,
+  "data": {
+    "description": "",
+    "html": "<html><head><meta name=\"color-scheme\" content=\"light dark\"></head><body><pre style=\"word-wrap: break-word; white-space: pre-wrap;\">[\n  {\n    \"name\": \"config-default\",\n    \"path\": \"target/linux/ipq50xx/arm/config-default\",\n    \"sha\": \"45bbd44183a62af407a86bf4b5429aa5a748ed0f\",\n    \"size\": 187,\n    \"url\": \"https://api.github.com/repos/sqliuchang/openwrt-redmi-ax3000/contents/target/linux/ipq50xx/arm/config-default?ref=ipq50xx-mainline-kernel-5.15-openwrt-23.05\",\n    \"html_url\": \"https://github.com/sqliuchang/openwrt-redmi-ax3000/blob/ipq50xx-mainline-kernel-5.15-openwrt-23.05/target/linux/ipq50xx/arm/config-default\",\n    \"git_url\": \"https://api.github.com/repos/sqliuchang/openwrt-redmi-ax3000/git/blobs/45bbd44183a62af407a86bf4b5429aa5a748ed0f\",\n    \"download_url\": \"https://raw.githubusercontent.com/sqliuchang/openwrt-redmi-ax3000/ipq50xx-mainline-kernel-5.15-openwrt-23.05/target/linux/ipq50xx/arm/config-default\",\n    \"type\": \"file\",\n    \"_links\": {\n      \"self\": \"https://api.github.com/repos/sqliuchang/openwrt-redmi-ax3000/contents/target/linux/ipq50xx/arm/config-default?ref=ipq50xx-mainline-kernel-5.15-openwrt-23.05\",\n      \"git\": \"https://api.github.com/repos/sqliuchang/openwrt-redmi-ax3000/git/blobs/45bbd44183a62af407a86bf4b5429aa5a748ed0f\",\n      \"html\": \"https://github.com/sqliuchang/openwrt-redmi-ax3000/blob/ipq50xx-mainline-kernel-5.15-openwrt-23.05/target/linux/ipq50xx/arm/config-default\"\n    }\n  },\n  {\n    \"name\": \"target.mk\",\n    \"path\": \"target/linux/ipq50xx/arm/target.mk\",\n    \"sha\": \"446a54e58105d6407542f2248341bc3d277ef167\",\n    \"size\": 91,\n    \"url\": \"https://api.github.com/repos/sqliuchang/openwrt-redmi-ax3000/contents/target/linux/ipq50xx/arm/target.mk?ref=ipq50xx-mainline-kernel-5.15-openwrt-23.05\",\n    \"html_url\": \"https://github.com/sqliuchang/openwrt-redmi-ax3000/blob/ipq50xx-mainline-kernel-5.15-openwrt-23.05/target/linux/ipq50xx/arm/target.mk\",\n    \"git_url\": \"https://api.github.com/repos/sqliuchang/openwrt-redmi-ax3000/git/blobs/446a54e58105d6407542f2248341bc3d277ef167\",\n    \"download_url\": \"https://raw.githubusercontent.com/sqliuchang/openwrt-redmi-ax3000/ipq50xx-mainline-kernel-5.15-openwrt-23.05/target/linux/ipq50xx/arm/target.mk\",\n    \"type\": \"file\",\n    \"_links\": {\n      \"self\": \"https://api.github.com/repos/sqliuchang/openwrt-redmi-ax3000/contents/target/linux/ipq50xx/arm/target.mk?ref=ipq50xx-mainline-kernel-5.15-openwrt-23.05\",\n      \"git\": \"https://api.github.com/repos/sqliuchang/openwrt-redmi-ax3000/git/blobs/446a54e58105d6407542f2248341bc3d277ef167\",\n      \"html\": \"https://github.com/sqliuchang/openwrt-redmi-ax3000/blob/ipq50xx-mainline-kernel-5.15-openwrt-23.05/target/linux/ipq50xx/arm/target.mk\"\n    }\n  }\n]\n</pre></body></html>",
+    "publishedTime": "Fri, 10 Oct 2025 13:39:56 GMT",
+    "title": "",
+    "url": "https://api.github.com/repos/sqliuchang/openwrt-redmi-ax3000/contents/target/linux/ipq50xx/arm",
+    "usage": {
+      "tokens": 947
+    }
+  },
+  "meta": {
+    "usage": {
+      "tokens": 947
+    }
+  },
+  "status": 20000
+}
