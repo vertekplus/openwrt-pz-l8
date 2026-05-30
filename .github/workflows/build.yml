@@ -107,8 +107,8 @@ jobs:
 
           # Insert PZ-L8 caldata entries with review-approved settings
           CALDATA=target/linux/qualcommax/ipq50xx/base-files/etc/hotplug.d/firmware/11-ath11k-caldata
-          chmod +x "$GITHUB_WORKSPACE/scripts/fix-caldata.sh"
-          "$GITHUB_WORKSPACE/scripts/fix-caldata.sh" "$CALDATA"
+          chmod +x "$GITHUB_WORKSPACE/.github/scripts/fix-caldata.sh"
+          "$GITHUB_WORKSPACE/.github/scripts/fix-caldata.sh" "$CALDATA"
 
       - name: "Add FM25LS01 SPI NAND support (V2 hardware)"
         working-directory: openwrt
