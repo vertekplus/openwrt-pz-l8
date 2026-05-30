@@ -36,3 +36,5 @@ openwrt-pz-l8/
 openwrt-upstream/
 skills/
 .env
+download/
+worklog.md
