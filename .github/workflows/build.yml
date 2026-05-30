@@ -1,6 +1,6 @@
 # GitHub Actions workflow for building OpenWrt firmware for CMCC PZ-L8
-# Builds Router then AP sequentially in a single job, sharing toolchain
-# and compiled packages to save ~35% total runner time.
+# Builds all variants sequentially in a single job, sharing toolchain
+# and compiled packages between builds to save runner time.
 #
 # Config organization:
 #   variants/ap/ap.config          - AP mode build config
@@ -12,7 +12,7 @@
 # To add a new variant:
 #   1. Create variants/<name>/<name>.config with desired packages
 #   2. Create variants/<name>/etc/uci-defaults/ with any first-boot scripts
-#   3. Add a build + collect-artifacts block in the build job
+#   3. Add the variant name to the VARIANTS env variable below
 
 name: Build OpenWrt for CMCC PZ-L8
 
@@ -32,6 +32,8 @@ env:
   TARGET: qualcommax
   SUBTARGET: ipq50xx
   DEVICE: cmcc_pz-l8
+  # Build variants (order matters: first = compiles toolchain + kernel + most packages)
+  VARIANTS: "router ap"
   # Pinned commit SHAs (update when upstream changes)
   PR_21495_SHA: d4286eec1828e4843bceaccc400846854fa46955
   BDF_COMMIT: f7ad5fee1924efdb5d8b2d1bf95bd3867d22e701
@@ -87,25 +89,21 @@ jobs:
           git config user.email "builder@github.com"
           git config user.name "GitHub Actions"
 
-          # Fetch and merge PR #21495 into main (stay on main, don't checkout PR branch)
           git fetch origin ${{ env.PR_21495_SHA }}
           if ! git merge FETCH_HEAD --no-edit; then
             echo "=== Merge conflicts detected (expected for caldata) ==="
             CALDATA=target/linux/qualcommax/ipq50xx/base-files/etc/hotplug.d/firmware/11-ath11k-caldata
-            # Take main's caldata (has latest device entries), fix-caldata.sh will insert PZ-L8
             git checkout --ours "$CALDATA"
             git add "$CALDATA"
             git commit --no-edit --no-verify
             echo "=== Caldata conflict resolved (using main version) ==="
           fi
 
-          # Verify pinned commit is in history
           if ! git log --oneline | grep -q "d4286eec"; then
             echo "ERROR: Pinned PR #21495 commit d4286eec not found."
             exit 1
           fi
 
-          # Insert PZ-L8 caldata entries with review-approved settings
           CALDATA=target/linux/qualcommax/ipq50xx/base-files/etc/hotplug.d/firmware/11-ath11k-caldata
           chmod +x "$GITHUB_WORKSPACE/scripts/fix-caldata.sh"
           "$GITHUB_WORKSPACE/scripts/fix-caldata.sh" "$CALDATA"
@@ -134,7 +132,6 @@ jobs:
 
           curl -L -o files/lib/firmware/ath11k/IPQ5018/hw1.0/board-2.bin \
             "https://github.com/openwrt/firmware_qca-wireless/raw/${{ env.BDF_COMMIT }}/board-cmcc_pz-l8.ipq5018"
-
           curl -L -o files/lib/firmware/ath11k/QCN6122/hw1.0/board-2.bin \
             "https://github.com/openwrt/firmware_qca-wireless/raw/${{ env.BDF_COMMIT }}/board-cmcc_pz-l8.qcn6122"
 
@@ -146,9 +143,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          key: ccache-${{ env.TARGET }}-shared-v14-${{ hashFiles('variants/*', 'patches/*', 'openwrt/feeds.conf.default') }}
+          key: ccache-${{ env.TARGET }}-shared-v15-${{ hashFiles('variants/*', 'patches/*', 'openwrt/feeds.conf.default') }}
           restore-keys: |
-            ccache-${{ env.TARGET }}-shared-v14-
+            ccache-${{ env.TARGET }}-shared-v15-
 
       - name: Configure ccache
         run: |
@@ -162,10 +159,6 @@ jobs:
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-
-      # ── Download precompiled toolchain (saves ~20-25min) ────────
-      # Tries to download the snapshot toolchain; falls back to
-      # compilation if download fails.
 
       - name: Download precompiled toolchain
         working-directory: openwrt
@@ -186,108 +179,57 @@ jobs:
 
           echo "=== Precompiled toolchain extracted ==="
 
-      # ── Build Router (first) ──────────────────────────────────
-      # Router has the most packages; building it first compiles the
-      # common toolchain + kernel + shared packages that AP reuses.
-
-      - name: "Router: copy overlay files"
-        run: |
-          VARIANT_DIR="$GITHUB_WORKSPACE/variants/router"
-          if [ -d "$VARIANT_DIR/etc" ]; then
-            cp -r "$VARIANT_DIR/etc" openwrt/files/
-            echo "=== Copied overlay files from $VARIANT_DIR/etc ==="
-            find openwrt/files/ -type f | sort
-          else
-            echo "No overlay files for Router mode"
-          fi
-
-      - name: "Router: generate configuration"
+      - name: Build all variants
         working-directory: openwrt
         run: |
-          cp "$GITHUB_WORKSPACE/variants/router/router.config" .config
-          make defconfig
-          make defconfig
+          VARIANT_COUNT=$(echo "${{ env.VARIANTS }}" | wc -w)
+          VARIANT_IDX=0
 
-      - name: "Router: download sources"
-        working-directory: openwrt
-        run: |
-          for i in 1 2 3; do
-            echo "Download attempt $i/3..."
-            if make download -j$(nproc) V=s; then break; fi
-            [ $i -eq 3 ] && exit 1
-            sleep 30
+          for VARIANT in ${{ env.VARIANTS }}; do
+            VARIANT_IDX=$((VARIANT_IDX + 1))
+            echo ""
+            echo "============================================================"
+            echo "=== [$VARIANT_IDX/$VARIANT_COUNT] Building variant: $VARIANT ==="
+            echo "============================================================"
+
+            VARIANT_DIR="$GITHUB_WORKSPACE/variants/$VARIANT"
+            mkdir -p "artifacts/$VARIANT"
+
+            # 1. Copy overlay files (clear previous variant's files first)
+            rm -rf files/etc 2>/dev/null
+            if [ -d "$VARIANT_DIR/etc" ]; then
+              cp -r "$VARIANT_DIR/etc" files/
+              echo "--- Copied overlay files ---"
+              find files/etc -type f | sort
+            fi
+
+            # 2. Generate configuration
+            cp "$VARIANT_DIR/$VARIANT.config" .config
+            make defconfig
+            make defconfig
+
+            # 3. Download sources
+            for i in 1 2 3; do
+              echo "Download attempt $i/3..."
+              if make download -j$(nproc) V=s; then break; fi
+              [ $i -eq 3 ] && exit 1
+              sleep 30
+            done
+
+            # 4. Build
+            make -j$(nproc) V=w || make -j1 V=w || make -j1 V=s
+
+            # 5. Collect artifacts
+            cp -v bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*factory*.ubi "artifacts/$VARIANT/" 2>/dev/null || true
+            cp -v bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*sysupgrade*.bin "artifacts/$VARIANT/" 2>/dev/null || true
+            echo "--- Artifacts for $VARIANT ---"
+            ls -lh "artifacts/$VARIANT/"
+
+            echo "=== [$VARIANT_IDX/$VARIANT_COUNT] $VARIANT done ==="
           done
-
-      - name: "Router: build"
-        working-directory: openwrt
-        run: make -j$(nproc) V=w || make -j1 V=w || make -j1 V=s
-
-      - name: "Router: collect artifacts"
-        run: |
-          mkdir -p artifacts/router
-          cp -v openwrt/bin/targets/qualcommax/ipq50xx/*factory*.ubi artifacts/router/ 2>/dev/null || echo "No factory.ubi found"
-          cp -v openwrt/bin/targets/qualcommax/ipq50xx/*sysupgrade*.bin artifacts/router/ 2>/dev/null || echo "No sysupgrade.bin found"
-          echo "=== Router artifacts ==="
-          ls -lh artifacts/router/
-
-      # ── Build AP (second, reuses compiled packages) ────────────
-
-      - name: "AP: copy overlay files"
-        run: |
-          VARIANT_DIR="$GITHUB_WORKSPACE/variants/ap"
-          if [ -d "$VARIANT_DIR/etc" ]; then
-            cp -r "$VARIANT_DIR/etc" openwrt/files/
-            echo "=== Copied overlay files from $VARIANT_DIR/etc ==="
-            find openwrt/files/ -type f | sort
-          else
-            echo "No overlay files for AP mode"
-          fi
-
-      - name: "AP: generate configuration"
-        working-directory: openwrt
-        run: |
-          cp "$GITHUB_WORKSPACE/variants/ap/ap.config" .config
-          make defconfig
-          make defconfig
-
-      - name: "AP: download sources"
-        working-directory: openwrt
-        run: |
-          for i in 1 2 3; do
-            echo "Download attempt $i/3..."
-            if make download -j$(nproc) V=s; then break; fi
-            [ $i -eq 3 ] && exit 1
-            sleep 30
-          done
-
-      - name: "AP: build (reuses toolchain + shared packages)"
-        working-directory: openwrt
-        run: make -j$(nproc) V=w || make -j1 V=w || make -j1 V=s
-
-      - name: "AP: collect artifacts"
-        run: |
-          mkdir -p artifacts/ap
-          cp -v openwrt/bin/targets/qualcommax/ipq50xx/*factory*.ubi artifacts/ap/ 2>/dev/null || echo "No factory.ubi found"
-          cp -v openwrt/bin/targets/qualcommax/ipq50xx/*sysupgrade*.bin artifacts/ap/ 2>/dev/null || echo "No sysupgrade.bin found"
-          echo "=== AP artifacts ==="
-          ls -lh artifacts/ap/
-
-      # ── Finalize ──────────────────────────────────────────────
 
       - name: Show ccache stats
         run: ccache -s
-
-      - name: Generate build info
-        run: |
-          cat > artifacts/BUILD_INFO.txt << EOF
-          Build: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-          Target: ${{ env.TARGET }}/${{ env.SUBTARGET }}
-          Device: ${{ env.DEVICE }}
-          Branch: main
-          Patches: PR #21495 (${{ env.PR_21495_SHA }}), FM25LS01 SPI NAND
-          EOF
-          echo "=== All artifacts ==="
-          find artifacts/ -type f | sort
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -316,18 +258,13 @@ jobs:
         run: |
           mkdir -p release
 
-          for f in artifacts/ap/*-sysupgrade.bin; do
-            [ -f "$f" ] && cp "$f" "release/openwrt-pz-l8-sysupgrade-ap.bin"
-          done
-          for f in artifacts/ap/*-factory.ubi; do
-            [ -f "$f" ] && cp "$f" "release/openwrt-pz-l8-factory-ap.ubi"
-          done
-
-          for f in artifacts/router/*-sysupgrade.bin; do
-            [ -f "$f" ] && cp "$f" "release/openwrt-pz-l8-sysupgrade-router.bin"
-          done
-          for f in artifacts/router/*-factory.ubi; do
-            [ -f "$f" ] && cp "$f" "release/openwrt-pz-l8-factory-router.ubi"
+          for VARIANT in ${{ env.VARIANTS }}; do
+            for f in artifacts/$VARIANT/*-sysupgrade.bin; do
+              [ -f "$f" ] && cp "$f" "release/openwrt-pz-l8-sysupgrade-$VARIANT.bin"
+            done
+            for f in artifacts/$VARIANT/*-factory.ubi; do
+              [ -f "$f" ] && cp "$f" "release/openwrt-pz-l8-factory-$VARIANT.ubi"
+            done
           done
 
           cd release
