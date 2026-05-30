@@ -68,7 +68,7 @@ jobs:
             libncurses-dev libssl-dev python3-distutils \
             python3-setuptools python3-dev rsync swig unzip \
             zlib1g-dev file wget curl jq device-tree-compiler \
-            ccache libelf-dev libdw-dev libiberty-dev
+            ccache libelf-dev libdw-dev libiberty-dev zstd
 
       - name: Checkout this repo
         uses: actions/checkout@v4
@@ -162,6 +162,29 @@ jobs:
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
+
+      # ── Download precompiled toolchain (saves ~20-25min) ────────
+      # Tries to download the snapshot toolchain; falls back to
+      # compilation if download fails.
+
+      - name: Download precompiled toolchain
+        working-directory: openwrt
+        continue-on-error: true
+        run: |
+          TOOLCHAIN_URL="https://downloads.openwrt.org/snapshots/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/"
+          TOOLCHAIN_FILE=$(curl -sL "$TOOLCHAIN_URL" | grep -oP 'openwrt-toolchain[^"]+tar\.zst' | head -1)
+
+          if [ -z "$TOOLCHAIN_FILE" ]; then
+            echo "No toolchain found at $TOOLCHAIN_URL, will compile from source"
+            exit 1
+          fi
+
+          echo "Downloading $TOOLCHAIN_FILE ..."
+          curl -LO "${TOOLCHAIN_URL}${TOOLCHAIN_FILE}"
+          tar --zstd -xf "$TOOLCHAIN_FILE"
+          rm -f "$TOOLCHAIN_FILE"
+
+          echo "=== Precompiled toolchain extracted ==="
 
       # ── Build Router (first) ──────────────────────────────────
       # Router has the most packages; building it first compiles the
