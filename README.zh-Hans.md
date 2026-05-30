@@ -192,17 +192,34 @@ patches/
 
 1. 创建 `variants/server/server.config`，填入所需的软件包（可复制现有配置作为模板）
 2. 创建 `variants/server/etc/uci-defaults/`，放入首次启动脚本
-3. 在 `.github/workflows/build.yml` 的构建矩阵中添加条目：
+3. 在 `.github/workflows/build.yml` 中参照 Router/AP 的模式添加构建步骤：
 
 ```yaml
-matrix:
-  include:
-    - mode: AP
-      mode_lower: ap
-    - mode: Router
-      mode_lower: router
-    - mode: Server        # <-- 添加此行
-      mode_lower: server
+# ── 构建 Server（在 AP 部分之后添加）─────────────────────────
+
+- name: "Server: copy overlay files"
+  run: |
+    VARIANT_DIR="$GITHUB_WORKSPACE/variants/server"
+    if [ -d "$VARIANT_DIR/etc" ]; then
+      cp -r "$VARIANT_DIR/etc" openwrt/files/
+    fi
+
+- name: "Server: generate configuration"
+  working-directory: openwrt
+  run: |
+    cp "$GITHUB_WORKSPACE/variants/server/server.config" .config
+    make defconfig
+    make defconfig
+
+- name: "Server: build"
+  working-directory: openwrt
+  run: make -j$(nproc) V=w || make -j1 V=w || make -j1 V=s
+
+- name: "Server: collect artifacts"
+  run: |
+    mkdir -p artifacts/server
+    cp -v openwrt/bin/targets/qualcommax/ipq50xx/*sysupgrade*.bin artifacts/server/ 2>/dev/null
+    cp -v openwrt/bin/targets/qualcommax/ipq50xx/*factory*.ubi artifacts/server/ 2>/dev/null
 ```
 
 ---

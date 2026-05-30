@@ -192,17 +192,34 @@ To add a new build variant (e.g., "Server" mode):
 
 1. Create `variants/server/server.config` with the desired packages (copy an existing config as template)
 2. Create `variants/server/etc/uci-defaults/` with any first-boot scripts
-3. Add an entry to the build matrix in `.github/workflows/build.yml`:
+3. Add a build + collect-artifacts block in `.github/workflows/build.yml` following the existing Router/AP pattern:
 
 ```yaml
-matrix:
-  include:
-    - mode: AP
-      mode_lower: ap
-    - mode: Router
-      mode_lower: router
-    - mode: Server        # <-- add this
-      mode_lower: server
+# ── Build Server (add after AP section) ─────────────────────
+
+- name: "Server: copy overlay files"
+  run: |
+    VARIANT_DIR="$GITHUB_WORKSPACE/variants/server"
+    if [ -d "$VARIANT_DIR/etc" ]; then
+      cp -r "$VARIANT_DIR/etc" openwrt/files/
+    fi
+
+- name: "Server: generate configuration"
+  working-directory: openwrt
+  run: |
+    cp "$GITHUB_WORKSPACE/variants/server/server.config" .config
+    make defconfig
+    make defconfig
+
+- name: "Server: build"
+  working-directory: openwrt
+  run: make -j$(nproc) V=w || make -j1 V=w || make -j1 V=s
+
+- name: "Server: collect artifacts"
+  run: |
+    mkdir -p artifacts/server
+    cp -v openwrt/bin/targets/qualcommax/ipq50xx/*sysupgrade*.bin artifacts/server/ 2>/dev/null
+    cp -v openwrt/bin/targets/qualcommax/ipq50xx/*factory*.ubi artifacts/server/ 2>/dev/null
 ```
 
 ---
