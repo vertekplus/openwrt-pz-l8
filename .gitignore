@@ -1,12 +1,7 @@
-# OpenWrt build directory
-openwrt/
-
 # Build artifacts
 bin/
 build_dir/
 staging_dir/
-tmp/
-logs/
 
 # Cache
 .ccache/
@@ -20,10 +15,15 @@ cache/
 *~
 
 # OS
+skills/
+upload/
+.env
 .DS_Store
 Thumbs.db
 
 # Temporary files
+tmp/
+logs/
 *.tmp
 *.temp
 *.log
@@ -32,8 +32,4 @@ Thumbs.db
 *.tar.gz
 *.tar.xz
 *.zip
-openwrt-pz-l8/
-openwrt-upstream/
-skills/
-.env
-upload/
+
