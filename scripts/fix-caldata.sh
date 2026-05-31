@@ -34,9 +34,19 @@ grep -n "cmcc,pz-l8" "$CALDATA" || echo "(no cmcc,pz-l8 entries)"
 # This ensures idempotency regardless of merge state
 sed -i '/cmcc,pz-l8/d' "$CALDATA"
 
-# Also clean up orphaned backslash continuations left after removal
-# e.g., "cmcc,pz-l8|\" becomes just trailing backslash on prev line
-sed -i ':a;N;$!ba;s/\\\n[[:space:]]*xiaomi/xiaomi/g' "$CALDATA"
+# Clean up orphaned backslash continuation on the line BEFORE the removed
+# cmcc,pz-l8|\ entry.  When the PR inserts "cmcc,pz-l8|\" as a fallthrough
+# before another device (e.g. "xiaomi,ax6000)"), removing the cmcc,pz-l8 line
+# leaves a dangling backslash on the preceding line if that line now ends with
+# "|\" but the next line starts a new case pattern (not another "|\" continuation).
+#
+# We only target the specific pattern: a line ending with |\ followed by a line
+# that is a case terminator ")".  This is safe because legitimate multi-device
+# fallthroughs use |\ before another |\ continuation, never directly before ).
+#
+# Example:  "some_device|\\"  +  "cmcc,pz-l8|\\"  +  "target_device)"
+#   → after removing cmcc,pz-l8:  "some_device|\\"  +  "target_device)"
+#   → some_device now falls through to target_device, which is correct.
 
 awk '
 BEGIN { in_24ghz = 0; in_5ghz_qcn6122 = 0; inserted_24 = 0; inserted_5 = 0 }

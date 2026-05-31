@@ -35,7 +35,7 @@ env:
   # Build variants (order matters: first = compiles toolchain + kernel + most packages)
   VARIANTS: "router ap"
   # Pinned commit SHAs (update when upstream changes)
-  PR_21495_SHA: d4286eec1828e4843bceaccc400846854fa46955
+  PR_21495_SHA: bb1d6cf5472bf0a5e4ebe5f20bc03011122a5734
   BDF_COMMIT: f7ad5fee1924efdb5d8b2d1bf95bd3867d22e701
 
 jobs:
@@ -99,8 +99,8 @@ jobs:
             echo "=== Caldata conflict resolved (using main version) ==="
           fi
 
-          if ! git log --oneline | grep -q "d4286eec"; then
-            echo "ERROR: Pinned PR #21495 commit d4286eec not found."
+          if ! git log --oneline | grep -q "bb1d6cf5"; then
+            echo "ERROR: Pinned PR #21495 commit bb1d6cf5 not found."
             exit 1
           fi
 
