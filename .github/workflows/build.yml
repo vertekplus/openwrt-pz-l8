@@ -184,12 +184,15 @@ jobs:
         run: |
           VARIANT_COUNT=$(echo "${{ env.VARIANTS }}" | wc -w)
           VARIANT_IDX=0
+          BUILD_START=$(date +%s)
 
           for VARIANT in ${{ env.VARIANTS }}; do
             VARIANT_IDX=$((VARIANT_IDX + 1))
+            VARIANT_START=$(date +%s)
             echo ""
             echo "============================================================"
             echo "=== [$VARIANT_IDX/$VARIANT_COUNT] Building variant: $VARIANT ==="
+            echo "=== Started: $(date -u +'%Y-%m-%dT%H:%M:%SZ') ==="
             echo "============================================================"
 
             VARIANT_DIR="$GITHUB_WORKSPACE/variants/$VARIANT"
@@ -210,15 +213,21 @@ jobs:
             make defconfig
 
             # 3. Download sources
+            DL_START=$(date +%s)
             for i in 1 2 3; do
               echo "Download attempt $i/3..."
               if make download -j$(nproc) V=s; then break; fi
               [ $i -eq 3 ] && exit 1
               sleep 30
             done
+            DL_SEC=$(( $(date +%s) - DL_START ))
+            echo "--- Download completed in ${DL_SEC}s ---"
 
             # 4. Build
+            BUILD_V_START=$(date +%s)
             make -j$(nproc) V=w || make -j1 V=w || make -j1 V=s
+            BUILD_V_SEC=$(( $(date +%s) - BUILD_V_START ))
+            echo "--- Build completed in ${BUILD_V_SEC}s ---"
 
             # 5. Collect artifacts
             cp -v bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*factory*.ubi "$ARTIFACT_DIR/" 2>/dev/null || true
@@ -227,8 +236,14 @@ jobs:
             echo "--- Artifacts for $VARIANT ---"
             ls -lh "$ARTIFACT_DIR/"
 
-            echo "=== [$VARIANT_IDX/$VARIANT_COUNT] $VARIANT done ==="
+            VARIANT_SEC=$(( $(date +%s) - VARIANT_START ))
+            echo ""
+            echo "=== [$VARIANT_IDX/$VARIANT_COUNT] $VARIANT done in ${VARIANT_SEC}s ==="
           done
+
+          TOTAL_SEC=$(( $(date +%s) - BUILD_START ))
+          echo ""
+          echo "=== All variants completed in ${TOTAL_SEC}s ==="
 
       - name: Show ccache stats
         run: ccache -s
