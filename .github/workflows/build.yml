@@ -193,7 +193,8 @@ jobs:
             echo "============================================================"
 
             VARIANT_DIR="$GITHUB_WORKSPACE/variants/$VARIANT"
-            mkdir -p "artifacts/$VARIANT"
+            ARTIFACT_DIR="$GITHUB_WORKSPACE/artifacts/$VARIANT"
+            mkdir -p "$ARTIFACT_DIR"
 
             # 1. Copy overlay files (clear previous variant's files first)
             rm -rf files/etc 2>/dev/null
@@ -220,11 +221,11 @@ jobs:
             make -j$(nproc) V=w || make -j1 V=w || make -j1 V=s
 
             # 5. Collect artifacts
-            cp -v bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*factory*.ubi "artifacts/$VARIANT/" 2>/dev/null || true
-            cp -v bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*sysupgrade*.bin "artifacts/$VARIANT/" 2>/dev/null || true
-            cp -v bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*initramfs*.itb "artifacts/$VARIANT/" 2>/dev/null || true
+            cp -v bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*factory*.ubi "$ARTIFACT_DIR/" 2>/dev/null || true
+            cp -v bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*sysupgrade*.bin "$ARTIFACT_DIR/" 2>/dev/null || true
+            cp -v bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*initramfs*.itb "$ARTIFACT_DIR/" 2>/dev/null || true
             echo "--- Artifacts for $VARIANT ---"
-            ls -lh "artifacts/$VARIANT/"
+            ls -lh "$ARTIFACT_DIR/"
 
             echo "=== [$VARIANT_IDX/$VARIANT_COUNT] $VARIANT done ==="
           done
