@@ -52,7 +52,7 @@ PR_21495_SHA="bb1d6cf5472bf0a5e4ebe5f20bc03011122a5734"
 BDF_COMMIT="f7ad5fee1924efdb5d8b2d1bf95bd3867d22e701"
 OPENWRT_REPO="https://github.com/openwrt/openwrt.git"
 OPENWRT_BRANCH="main"
-OPENWRT_SHA=""  # Set to a pinned commit SHA to lock the OpenWrt version. Leave empty to track main HEAD.
+OPENWRT_SHA="${OPENWRT_SHA:-}"  # Set to a pinned commit SHA to lock the OpenWrt version. Leave empty to track main HEAD.
 
 # ── Defaults ─────────────────────────────────────────────────────────────
 VARIANTS="${DEFAULT_VARIANTS}"

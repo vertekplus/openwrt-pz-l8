@@ -30,6 +30,10 @@ on:
         description: 'Release tag (leave empty for no release)'
         required: false
         default: ''
+      openwrt_sha:
+        description: 'OpenWrt commit SHA (leave empty for latest main)'
+        required: false
+        default: ''
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -43,7 +47,7 @@ env:
 jobs:
   validate:
     name: Validate
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Check inputs
         run: |
@@ -55,7 +59,7 @@ jobs:
   build:
     name: Build
     needs: validate
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 720
 
     steps:
@@ -139,6 +143,8 @@ jobs:
 
       - name: Build variants
         if: steps.artifact-cache.outputs.cache-hit != 'true'
+        env:
+            OPENWRT_SHA: ${{ inputs.openwrt_sha }}
         run: |
           chmod +x "$GITHUB_WORKSPACE/build.sh"
           VARIANT="${{ inputs.variant || '' }}"
@@ -191,7 +197,7 @@ jobs:
   release:
     name: Create Release
     needs: build
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     if: inputs.release_tag != ''
 
     steps:
