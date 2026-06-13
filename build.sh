@@ -396,7 +396,18 @@ download_toolchain() {
     if curl -LO "${TOOLCHAIN_URL}${TOOLCHAIN_FILE}"; then
         if tar --zstd -xf "$TOOLCHAIN_FILE" 2>/dev/null; then
             rm -f "$TOOLCHAIN_FILE"
-            echo "=== Precompiled toolchain extracted ==="
+            # The tar extracts to a directory like openwrt-toolchain-<arch>/
+            # Copy the toolchain from staging_dir/toolchain-* to our staging_dir/
+            EXTRACTED_TOOLCHAIN=$(find . -maxdepth 1 -type d -name "openwrt-toolchain-*" | head -1)
+            if [ -n "$EXTRACTED_TOOLCHAIN" ] && [ -d "$EXTRACTED_TOOLCHAIN/staging_dir" ]; then
+                echo "=== Installing precompiled toolchain to staging_dir/ ==="
+                cp -a "$EXTRACTED_TOOLCHAIN/staging_dir/toolchain-"* staging_dir/
+                rm -rf "$EXTRACTED_TOOLCHAIN"
+                echo "=== Precompiled toolchain installed ==="
+            else
+                echo "WARNING: Extracted toolchain has unexpected structure, will compile from source"
+                rm -rf "$EXTRACTED_TOOLCHAIN"
+            fi
         else
             echo "Failed to extract toolchain, will compile from source"
             rm -f "$TOOLCHAIN_FILE"
