@@ -133,12 +133,13 @@ install_deps_debian() {
     echo "=== Installing dependencies (Debian/Ubuntu) ==="
     sudo apt-get update
     sudo apt-get install -y \
-        build-essential clang flex bison g++ gawk \
-        gcc-multilib g++-multilib gettext git \
-        libncurses-dev libssl-dev python3-distutils \
-        python3-setuptools python3-dev rsync swig unzip \
-        zlib1g-dev file wget curl jq device-tree-compiler \
-        ccache libelf-dev libdw-dev libiberty-dev zstd
+		build-essential clang flex bison g++ gawk \
+		gcc-multilib g++-multilib gettext git \
+		libncurses-dev libssl-dev \
+		python3-setuptools python3-dev \
+		rsync swig unzip zlib1g-dev file wget curl jq \
+		device-tree-compiler ccache libelf-dev \
+		libdw-dev libiberty-dev zstd
 }
 
 install_deps_fedora() {
