@@ -24,6 +24,7 @@ Thumbs.db
 # Temporary files
 tmp/
 logs/
+tool-results/
 *.tmp
 *.temp
 *.log
