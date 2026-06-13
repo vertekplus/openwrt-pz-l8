@@ -293,12 +293,45 @@ merge_pr_and_fix_caldata() {
 
     # Extract and apply all PR changes (including caldata, which fix-caldata.sh
     # will then enhance with MAC/regdomain/macflag patches)
-    git diff FETCH_HEAD^..FETCH_HEAD | git apply --3way || {
-        echo "ERROR: Failed to apply PR #21495 patches."
-        echo "This may indicate a conflict with the current OpenWrt version."
-        echo "Please check if OPENWRT_SHA or PR_21495_SHA needs updating."
-        exit 1
-    }
+    if ! git diff FETCH_HEAD^..FETCH_HEAD | git apply --3way; then
+        echo "WARNING: git apply encountered conflicts."
+        # Find all .rej files
+        REJ_FILES=$(git ls-files --others --exclude-standard "*.rej" 2>/dev/null)
+        if [ -z "$REJ_FILES" ]; then
+            REJ_FILES=$(find . -name "*.rej" -not -path "./.git/*" 2>/dev/null)
+        fi
+        if [ -z "$REJ_FILES" ]; then
+            echo "No .rej files found, checking for other conflict indicators..."
+            # git apply --3way may leave stage conflicts
+            if git diff --quiet; then
+                echo "No actual changes detected, continuing."
+            else
+                echo "ERROR: Conflict detected but no .rej files. Manual intervention needed."
+                exit 1
+            fi
+        else
+            NON_CALDATA_REJ=""
+            for rej in $REJ_FILES; do
+                case "$rej" in
+                    *11-ath11k-caldata.rej)
+                        echo "  Caldata conflict detected: $rej"
+                        # Caldata conflict is expected: fix-caldata.sh will handle it
+                        rm -f "$rej"
+                        ;;
+                    *)
+                        NON_CALDATA_REJ="$NON_CALDATA_REJ $rej"
+                        ;;
+                esac
+            done
+            if [ -n "$NON_CALDATA_REJ" ]; then
+                echo "ERROR: Non-caldata conflict(s):$NON_CALDATA_REJ"
+                echo "Please check if OPENWRT_SHA or PR_21495_SHA needs updating."
+                exit 1
+            fi
+        fi
+        # Clean up any remaining .rej and .orig files
+        find . \( -name "*.rej" -o -name "*.orig" \) -not -path "./.git/*" -delete 2>/dev/null || true
+    fi
 
     echo "=== PR #21495 patches applied ==="
 
