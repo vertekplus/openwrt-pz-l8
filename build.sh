@@ -395,10 +395,14 @@ download_toolchain() {
 
     echo "Downloading $TOOLCHAIN_FILE ..."
     if curl -LO "${TOOLCHAIN_URL}${TOOLCHAIN_FILE}"; then
-        if tar --zstd -xf "$TOOLCHAIN_FILE" 2>/dev/null; then
-            rm -f "$TOOLCHAIN_FILE"
-            # The tar extracts to a directory like openwrt-toolchain-<arch>/
-            # Copy the toolchain from staging_dir/toolchain-* to our staging_dir/
+        echo "Extracting $TOOLCHAIN_FILE ..."
+        # Use zstd -d piped to tar for maximum compatibility
+        if zstd -d "$TOOLCHAIN_FILE" -o /tmp/toolchain.tar && tar -xf /tmp/toolchain.tar; then
+            rm -f "$TOOLCHAIN_FILE" /tmp/toolchain.tar
+            # List what was extracted to debug
+            echo "Extracted directories:"
+            ls -d */ 2>/dev/null | head -5 || echo "  (none at top level)"
+            # Find the extracted toolchain directory
             EXTRACTED_TOOLCHAIN=$(find . -maxdepth 1 -type d -name "openwrt-toolchain-*" | head -1)
             if [ -n "$EXTRACTED_TOOLCHAIN" ] && [ -d "$EXTRACTED_TOOLCHAIN/staging_dir" ]; then
                 echo "=== Installing precompiled toolchain to staging_dir/ ==="
@@ -406,12 +410,24 @@ download_toolchain() {
                 rm -rf "$EXTRACTED_TOOLCHAIN"
                 echo "=== Precompiled toolchain installed ==="
             else
-                echo "WARNING: Extracted toolchain has unexpected structure, will compile from source"
-                rm -rf "$EXTRACTED_TOOLCHAIN"
+                # Maybe the tar extracts directly to staging_dir/toolchain-*/
+                EXTRACTED_DIRECT=$(find . -maxdepth 2 -type d -path "*/staging_dir/toolchain-*" | head -1)
+                if [ -n "$EXTRACTED_DIRECT" ]; then
+                    TOOLCHAIN_DIR=$(dirname "$EXTRACTED_DIRECT")
+                    echo "=== Installing precompiled toolchain from $TOOLCHAIN_DIR ==="
+                    cp -a "$EXTRACTED_DIRECT" staging_dir/
+                    rm -rf "$TOOLCHAIN_DIR"
+                    echo "=== Precompiled toolchain installed ==="
+                else
+                    echo "WARNING: Extracted toolchain has unexpected structure, will compile from source"
+                    echo "Files in current dir:"
+                    ls -la | head -10
+                    rm -rf "$EXTRACTED_TOOLCHAIN"
+                fi
             fi
         else
             echo "Failed to extract toolchain, will compile from source"
-            rm -f "$TOOLCHAIN_FILE"
+            rm -f "$TOOLCHAIN_FILE" /tmp/toolchain.tar
         fi
     else
         echo "Failed to download toolchain, will compile from source"
