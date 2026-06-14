@@ -413,7 +413,8 @@ download_toolchain() {
                 TOOLCHAIN_SRC=$(find "$SEARCH_ROOT" -maxdepth 3 -type d -path "*/staging_dir/toolchain-*" | head -1)
             fi
             if [ -n "$TOOLCHAIN_SRC" ]; then
-                echo "=== Installing precompiled toolchain to staging_dir/ ==="
+                TOOLCHAIN_NAME=$(basename "$TOOLCHAIN_SRC")
+                echo "=== Installing precompiled toolchain ($TOOLCHAIN_NAME) to staging_dir/ ==="
                 cp -a "$TOOLCHAIN_SRC" staging_dir/
                 echo "=== Precompiled toolchain installed ==="
             else
@@ -479,9 +480,19 @@ build_variants() {
         DL_SEC=$(( $(date +%s) - DL_START ))
         echo "--- Download completed in ${DL_SEC}s ---"
 
-        # 4. Build
+        # 4. Build (skip toolchain/compile if precompiled toolchain is installed)
         BUILD_V_START=$(date +%s)
-        make -j"$JOBS" V=w || make -j1 V=w || make -j1 V=s
+        if [ -d "staging_dir/toolchain-aarch64_cortex-a53_gcc-14.3.0_musl" ]; then
+            echo "=== Using precompiled toolchain, skipping toolchain/compile ==="
+            make toolchain/kernels-prepare -j"$JOBS" V=w || true
+            make target/compile -j"$JOBS" V=w || make target/compile -j1 V=w || make target/compile -j1 V=s
+            make package/compile -j"$JOBS" V=w || make package/compile -j1 V=w || make package/compile -j1 V=s
+            make package/install -j"$JOBS" V=w || make package/install -j1 V=w || make package/install -j1 V=s
+            make target/install -j"$JOBS" V=w || make target/install -j1 V=w || make target/install -j1 V=s
+            make package_index -j"$JOBS" V=w || true
+        else
+            make -j"$JOBS" V=w || make -j1 V=w || make -j1 V=s
+        fi
         BUILD_V_SEC=$(( $(date +%s) - BUILD_V_START ))
         echo "--- Build completed in ${BUILD_V_SEC}s ---"
 
