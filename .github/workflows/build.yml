@@ -137,14 +137,6 @@ jobs:
       - name: Checkout this repo
         uses: actions/checkout@v4
 
-      - name: Checkout OpenWrt
-        uses: actions/checkout@v4
-        with:
-          repository: openwrt/openwrt
-          ref: main
-          path: openwrt
-          fetch-depth: 1
-
       - name: Free disk space
         uses: jlumbroso/free-disk-space@main
         with:
@@ -177,7 +169,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          key: ccache-${{ env.TARGET }}-shared-v16-${{ hashFiles('variants/**', 'patches/**', 'build.sh', 'openwrt/feeds.conf.default') }}
+          key: ccache-${{ env.TARGET }}-shared-v16-${{ hashFiles('variants/**', 'patches/**', 'build.sh') }}
           restore-keys: |
             ccache-${{ env.TARGET }}-shared-v16-
 
@@ -185,7 +177,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: openwrt/dl
-          key: dl-${{ env.TARGET }}-v1-${{ hashFiles('openwrt/feeds.conf.default', 'variants/**', 'patches/**', 'build.sh') }}
+          key: dl-${{ env.TARGET }}-v1-${{ hashFiles('variants/**', 'patches/**', 'build.sh') }}
           restore-keys: |
             dl-${{ env.TARGET }}-v1-
 
@@ -202,9 +194,6 @@ jobs:
         with:
           path: artifacts/
           key: firmware-${{ needs.check.outputs.build-key }}
-
-      - name: Show ccache stats
-        run: ccache -s
 
       - name: Build summary
         run: |
