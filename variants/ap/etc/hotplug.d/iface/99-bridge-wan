@@ -1,0 +1,14 @@
+#!/bin/sh
+# hotplug iface: Join wan port to br-lan after bridge is up.
+# This avoids the ~5min NSS PPE outage caused by creating the bridge
+# with wan (dp1/PHY-to-PHY) at boot time (see openwrt#23830).
+#
+# Runs on every br-lan ifup (boot and network reload), idempotent.
+# ip link add does NOT trigger netifd bridge recreate, so PPE is clean.
+
+[ "$INTERFACE" = "br-lan" ] && [ "$ACTION" = "ifup" ] || exit 0
+
+# Skip if wan is already in the bridge
+ip link show br-lan 2>/dev/null | grep -q " wan@" && exit 0
+
+ip link set wan master br-lan 2>/dev/null

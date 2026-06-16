@@ -15,7 +15,7 @@ MAC_SUFFIX=$(tr -d ':' </sys/class/net/eth0/address | sed 's/.*\(....\)$/\1/' | 
 
 uci set system.@system[0].hostname="CMCC-$MAC_SUFFIX"
 
-# Bridge all ports (lan1, lan2, lan3, wan)
+# Bridge all ports
 uci -q delete network.@device[0]
 uci set network.device='device'
 uci set network.device.name='br-lan'
@@ -23,7 +23,7 @@ uci set network.device.type='bridge'
 uci add_list network.device.ports='lan1'
 uci add_list network.device.ports='lan2'
 uci add_list network.device.ports='lan3'
-uci add_list network.device.ports='wan'
+# wan joins via hotplug
 
 # LAN: DHCP client
 uci set network.lan='interface'
