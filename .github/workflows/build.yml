@@ -1,31 +1,30 @@
 # GitHub Actions workflow for building OpenWrt firmware for CMCC PZ-L8
-# Builds all variants sequentially in a single job, sharing toolchain
-# and compiled packages between builds to save runner time.
 #
-# The actual build logic lives in build.sh (shared with local builds).
-# This workflow provides CI-specific infrastructure: disk cleanup,
-# dependency installation, ccache caching, artifact upload, and releases.
+# Jobs:
+#   check   - Gate: deduplicate push vs PR, skip drafts, check artifact cache
+#   build   - Run build only when cache misses (skip on hit)
+#   release - Create GitHub release with tagged artifacts (manual only)
 #
-# Config organization:
-#   variants/*/build.config       - Build configs (auto-discovered by build.sh)
-#   variants/*/etc/uci-defaults/  - First-boot scripts
-#   scripts/   - Build scripts (modify OpenWrt source tree)
-#   patches/  - Kernel/device patches applied during build
+# Trigger deduplication:
+#   - push: cancelled if an open PR exists for the branch (PR CI will cover it)
+#   - pull_request: draft PRs are cancelled entirely
+#   - concurrency group uses branch name as additional safety net
 #
-# To add a new variant:
-#   1. Create variants/<name>/build.config with desired packages
-#   2. Create variants/<name>/etc/uci-defaults/ with any first-boot scripts
-#   3. No other changes needed - build.sh auto-discovers variants
+# Cache key is based on repo build files only (variants, patches, scripts, build.sh),
+# NOT on OpenWrt version or repo commit SHA. OpenWrt SHA is pinned in build.sh.
+# All variants are always built (no variant selection).
 
 name: Build OpenWrt for CMCC PZ-L8
 
 on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
     inputs:
-      variant:
-        description: 'Variant to build (leave empty for all)'
-        required: false
-        default: ''
       release_tag:
         description: 'Release tag (leave empty for no release)'
         required: false
@@ -36,7 +35,7 @@ on:
         default: ''
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: true
 
 env:
@@ -45,25 +44,96 @@ env:
   DEVICE: cmcc_pz-l8
 
 jobs:
-  validate:
-    name: Validate
+  check:
+    name: Check
     runs-on: ubuntu-latest
+    outputs:
+      cache-hit: ${{ steps.artifact-cache.outputs.cache-hit }}
+      build-key: ${{ steps.sig.outputs.key }}
+      skip-build: ${{ steps.decide.outputs.skip-build }}
+      skip-all: ${{ steps.gate.outputs.skip }}
+
     steps:
-      - name: Check inputs
+      - name: Gate - deduplicate push/PR, skip drafts
+        id: gate
         run: |
-          if [ -n "${{ inputs.release_tag }}" ] && [ -n "${{ inputs.variant }}" ]; then
-            echo "ERROR: Release builds require all variants (variant must be empty)."
-            exit 1
+          SKIP=false
+          if [ "${{ github.event_name }}" = 'push' ]; then
+            # Cancel if an open PR exists for this branch (PR CI will cover it)
+            BRANCH="${GITHUB_REF_NAME}"
+            PRS=$(curl -sf -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "${{ github.api_url }}/repos/${{ github.repository }}/pulls?head=${{ github.repository_owner }}:${BRANCH}&state=open" \
+              | jq 'length')
+            if [ "$PRS" -gt 0 ]; then
+              SKIP=true
+              echo "::notice::Cancelling push CI: $PRS open PR(s) for branch $BRANCH (PR CI will run instead)"
+            fi
+          elif [ "${{ github.event_name }}" = 'pull_request' ]; then
+            # Extra safety: cancel draft PRs
+            if [ "${{ github.event.pull_request.draft }}" = 'true' ]; then
+              SKIP=true
+              echo "::notice::Cancelling CI: draft PR"
+            fi
           fi
+          echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
+          if [ "$SKIP" = 'true' ]; then
+            curl -sf -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "${{ github.api_url }}/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+          fi
+
+      - name: Checkout this repo
+        if: steps.gate.outputs.skip != 'true'
+        uses: actions/checkout@v4
+
+      - name: Compute build signature
+        if: steps.gate.outputs.skip != 'true'
+        id: sig
+        run: |
+          INPUT_SIG="${{ hashFiles('variants/**', 'patches/**', 'scripts/**', 'build.sh') }}"
+          echo "key=$INPUT_SIG" >> "$GITHUB_OUTPUT"
+
+      - name: Try to restore cached artifacts
+        if: steps.gate.outputs.skip != 'true'
+        id: artifact-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: artifacts/
+          key: firmware-${{ steps.sig.outputs.key }}
+
+      - name: Decide whether to skip build
+        if: steps.gate.outputs.skip != 'true'
+        id: decide
+        run: |
+          if [ "${{ steps.artifact-cache.outputs.cache-hit }}" = 'true' ]; then
+            echo "skip-build=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Cache hit (firmware-${{ steps.sig.outputs.key }}). Build will be skipped."
+          else
+            echo "skip-build=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload cached artifacts (cache hit only)
+        if: steps.gate.outputs.skip != 'true' && steps.artifact-cache.outputs.cache-hit == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-firmware
+          path: artifacts/
+          retention-days: 1
+
+      - name: Check summary
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          echo "**Cache key**: \`firmware-${{ steps.sig.outputs.key }}\`" >> "$GITHUB_STEP_SUMMARY"
 
   build:
     name: Build
-    needs: validate
+    needs: check
+    if: needs.check.outputs.skip-all != 'true' && needs.check.outputs.skip-build != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 720
 
     steps:
-      # Light steps first: checkout to compute cache key
       - name: Checkout this repo
         uses: actions/checkout@v4
 
@@ -75,26 +145,7 @@ jobs:
           path: openwrt
           fetch-depth: 1
 
-      - name: Compute build signature
-        id: sig
-        run: |
-          OPENWRT_SHA=$(cd openwrt && git rev-parse HEAD)
-          REPO_SHA=$(git rev-parse HEAD)
-          SIG="${OPENWRT_SHA:0:12}-${REPO_SHA:0:12}"
-          echo "key=$SIG" >> "$GITHUB_OUTPUT"
-          echo "openwrt=${OPENWRT_SHA:0:12}" >> "$GITHUB_OUTPUT"
-          echo "repo=${REPO_SHA:0:12}" >> "$GITHUB_OUTPUT"
-
-      - name: Try to restore cached artifacts
-        id: artifact-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: artifacts/
-          key: firmware-${{ steps.sig.outputs.key }}
-
-      # Heavy steps only when cache misses
       - name: Free disk space
-        if: steps.artifact-cache.outputs.cache-hit != 'true'
         uses: jlumbroso/free-disk-space@main
         with:
           tool-cache: false
@@ -106,13 +157,11 @@ jobs:
           swap-storage: true
 
       - name: Show system info
-        if: steps.artifact-cache.outputs.cache-hit != 'true'
         run: |
           echo "=== Disk ===" && df -h /
           echo "=== Memory ===" && free -h
 
       - name: Install dependencies
-        if: steps.artifact-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -125,20 +174,18 @@ jobs:
             libdw-dev libiberty-dev zstd
 
       - name: Cache ccache
-        if: steps.artifact-cache.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          key: ccache-${{ env.TARGET }}-shared-v16-${{ hashFiles('variants/*', 'patches/*', 'openwrt/feeds.conf.default') }}
+          key: ccache-${{ env.TARGET }}-shared-v16-${{ hashFiles('variants/**', 'patches/**', 'build.sh', 'openwrt/feeds.conf.default') }}
           restore-keys: |
             ccache-${{ env.TARGET }}-shared-v16-
 
       - name: Cache dl (downloaded source tarballs)
-        if: steps.artifact-cache.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
           path: openwrt/dl
-          key: dl-${{ env.TARGET }}-v1-${{ hashFiles('openwrt/feeds.conf.default', 'variants/*') }}
+          key: dl-${{ env.TARGET }}-v1-${{ hashFiles('openwrt/feeds.conf.default', 'variants/**', 'patches/**', 'build.sh') }}
           restore-keys: |
             dl-${{ env.TARGET }}-v1-
 
@@ -148,45 +195,24 @@ jobs:
             OPENWRT_SHA: ${{ inputs.openwrt_sha }}
         run: |
           chmod +x "$GITHUB_WORKSPACE/build.sh"
-          VARIANT="${{ inputs.variant || '' }}"
-          if [ -z "$VARIANT" ]; then
-            "$GITHUB_WORKSPACE/build.sh" -c on -k "$GITHUB_WORKSPACE/openwrt"
-          else
-            "$GITHUB_WORKSPACE/build.sh" -c on -k "$GITHUB_WORKSPACE/openwrt" "$VARIANT"
-          fi
+          "$GITHUB_WORKSPACE/build.sh" -c on -k "$GITHUB_WORKSPACE/openwrt"
 
-      - name: Save artifacts to cache (full build only)
-        if: steps.artifact-cache.outputs.cache-hit != 'true' && (inputs.variant == '' || inputs.variant == 'all')
+      - name: Save artifacts to cache
         uses: actions/cache/save@v4
         with:
           path: artifacts/
-          key: firmware-${{ steps.sig.outputs.key }}
+          key: firmware-${{ needs.check.outputs.build-key }}
 
       - name: Show ccache stats
-        if: steps.artifact-cache.outputs.cache-hit != 'true'
         run: ccache -s
 
       - name: Build summary
         run: |
-          if [ "${{ steps.artifact-cache.outputs.cache-hit }}" = 'true' ]; then
-            echo "## 🎉 Cache Hit - Build Skipped" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "## 🔨 Build Completed" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          echo "**Cache key**: \`firmware-${{ needs.check.outputs.build-key }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Source | Commit |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **OpenWrt** | \`${{ steps.sig.outputs.openwrt }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Repo** | \`${{ steps.sig.outputs.repo }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Variant** | \`${{ inputs.variant || 'all' }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ steps.artifact-cache.outputs.cache-hit }}" = 'true' ]; then
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
-            find artifacts/ -type f | sort >> "$GITHUB_STEP_SUMMARY"
-            echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "| **Build key** | \`firmware-${{ steps.sig.outputs.key }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          find artifacts/ -type f | sort >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -196,10 +222,10 @@ jobs:
           retention-days: 1
 
   release:
-    name: Create Release
-    needs: build
+    name: Release
+    needs: [check, build]
+    if: needs.check.outputs.skip-all != 'true' && inputs.release_tag != ''
     runs-on: ubuntu-latest
-    if: inputs.release_tag != ''
 
     steps:
       - name: Checkout this repo
