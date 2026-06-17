@@ -233,6 +233,8 @@ variants/
     build.config                # AP mode: full build config (target, WiFi, mesh, minimal LuCI)
     etc/uci-defaults/
       99-init-ap                 # Initial AP mode config (skip if hostname or password set)
+    etc/hotplug.d/iface/
+      99-bridge-wan              # Join wan port to br-lan after boot (workaround for openwrt#23830)
   router/
     build.config                # Router mode: full build config (target, WiFi, firewall, full LuCI)
     etc/uci-defaults/            # (empty — no first-boot scripts needed)
