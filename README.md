@@ -234,10 +234,9 @@ variants/
     etc/uci-defaults/
       99-init-ap                 # Initial AP mode config (skip if hostname or password set)
     etc/hotplug.d/iface/
-      99-bridge-wan              # Join wan port to br-lan after boot (workaround for openwrt#23830)
+      99-bridge-wan              # Join wan port to br-lan after boot (workaround for #4)
   router/
     build.config                # Router mode: full build config (target, WiFi, firewall, full LuCI)
-    etc/uci-defaults/            # (empty — no first-boot scripts needed)
 scripts/
   fix-caldata.sh                # Caldata fix for PR #21495 review feedback
 patches/

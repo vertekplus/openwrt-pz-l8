@@ -234,10 +234,9 @@ variants/
     etc/uci-defaults/
       99-init-ap                 # 初始化 AP 模式配置（已设主机名或密码则跳过）
     etc/hotplug.d/iface/
-      99-bridge-wan              # 启动后将 wan 口加入 br-lan（openwrt#23830 临时修复）
+      99-bridge-wan              # 启动后将 wan 口加入 br-lan（#4 临时修复）
   router/
     build.config                # 路由模式：完整构建配置（目标、WiFi、防火墙、完整 LuCI）
-    etc/uci-defaults/            # （空 — 无需首次启动脚本）
 scripts/
   fix-caldata.sh                # PR #21495 审查反馈的 Caldata 修正脚本
 patches/
