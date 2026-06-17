@@ -73,12 +73,6 @@ jobs:
             fi
           fi
           echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
-          if [ "$SKIP" = 'true' ]; then
-            curl -sf -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "${{ github.api_url }}/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-          fi
 
       - name: Checkout this repo
         if: steps.gate.outputs.skip != 'true'
