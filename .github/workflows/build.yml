@@ -6,8 +6,8 @@
 #   release - Create GitHub release with tagged artifacts (manual only)
 #
 # Trigger deduplication:
-#   - push: cancelled if an open PR exists for the branch (PR CI will cover it)
-#   - pull_request: draft PRs are cancelled entirely
+#   - push: skipped if an open PR exists for the branch (PR CI will cover it)
+#   - pull_request: draft PRs are skipped entirely
 #   - concurrency group uses branch name as additional safety net
 #
 # Cache key is based on repo build files only (variants, patches, scripts, build.sh),
@@ -56,20 +56,20 @@ jobs:
         run: |
           SKIP=false
           if [ "${{ github.event_name }}" = 'push' ]; then
-            # Cancel if an open PR exists for this branch (PR CI will cover it)
+            # Skip if an open PR exists for this branch (PR CI will cover it)
             BRANCH="${GITHUB_REF_NAME}"
             PRS=$(curl -sf -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               "${{ github.api_url }}/repos/${{ github.repository }}/pulls?head=${{ github.repository_owner }}:${BRANCH}&state=open" \
               | jq 'length')
             if [ "$PRS" -gt 0 ]; then
               SKIP=true
-              echo "::notice::Cancelling push CI: $PRS open PR(s) for branch $BRANCH (PR CI will run instead)"
+              echo "::notice::Skipping push CI: $PRS open PR(s) for branch $BRANCH (PR CI will run instead)"
             fi
           elif [ "${{ github.event_name }}" = 'pull_request' ]; then
-            # Extra safety: cancel draft PRs
+            # Extra safety: skip draft PRs
             if [ "${{ github.event.pull_request.draft }}" = 'true' ]; then
               SKIP=true
-              echo "::notice::Cancelling CI: draft PR"
+              echo "::notice::Skipping CI: draft PR"
             fi
           fi
           echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
