@@ -264,7 +264,11 @@ prepare_openwrt() {
     else
         echo "=== Cloning OpenWrt ==="
         cd "$PROJECT_ROOT"
+        # Preserve dl/ cache if it exists (restored by CI cache step)
+        [ -d openwrt/dl ] && mv openwrt/dl /tmp/openwrt-dl-backup
+        rm -rf openwrt
         git clone --depth 1 -b "$OPENWRT_BRANCH" "$OPENWRT_REPO" openwrt
+        [ -d /tmp/openwrt-dl-backup ] && mv /tmp/openwrt-dl-backup openwrt/dl
         cd openwrt
         OPENWRT_DIR="$(pwd)"
     fi
