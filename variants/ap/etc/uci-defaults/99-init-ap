@@ -23,7 +23,7 @@ uci set network.device.type='bridge'
 uci add_list network.device.ports='lan1'
 uci add_list network.device.ports='lan2'
 uci add_list network.device.ports='lan3'
-# wan joins via hotplug
+uci add_list network.device.ports='wan'
 
 # LAN: DHCP client
 uci set network.lan='interface'
