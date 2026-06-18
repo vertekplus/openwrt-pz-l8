@@ -290,15 +290,17 @@ merge_pr_and_fix_caldata() {
     echo ""
     echo "=== Applying PR #21495 (ath11k smallbuffers + PZ-L8 WiFi) ==="
 
-    # Fetch the PR commit and its parent (needed for git diff and --3way merge)
-    git fetch --depth=2 origin "$PR_21495_SHA" || {
-        echo "ERROR: Failed to fetch PR commit $PR_21495_SHA"
+    # Fetch the full PR branch so all PR commits are included in the diff.
+    # Previously we used FETCH_HEAD^..FETCH_HEAD which only covered the last commit,
+    # missing the first commit that adds ath11k-smallbuffers support.
+    git fetch origin "refs/pull/21495/head:pr-21495" 2>/dev/null || {
+        echo "ERROR: Failed to fetch PR #21495 branch"
         exit 1
     }
 
-    # Extract and apply all PR changes (including caldata, which fix-caldata.sh
-    # will then enhance with MAC/regdomain/macflag patches)
-    if ! git diff FETCH_HEAD^..FETCH_HEAD | git apply --3way; then
+    # Diff from current HEAD (pinned OpenWrt) to PR branch head.
+    # This covers all PR commits, not just the last one.
+    if ! git diff HEAD..pr-21495 | git apply --3way; then
         echo "WARNING: git apply encountered conflicts."
         # Find all .rej files
         REJ_FILES=$(git ls-files --others --exclude-standard "*.rej" 2>/dev/null)
@@ -337,6 +339,9 @@ merge_pr_and_fix_caldata() {
         # Clean up any remaining .rej and .orig files
         find . \( -name "*.rej" -o -name "*.orig" \) -not -path "./.git/*" -delete 2>/dev/null || true
     fi
+
+    # Clean up the temporary branch ref
+    git branch -D pr-21495 2>/dev/null || true
 
     echo "=== PR #21495 patches applied ==="
 
@@ -467,8 +472,27 @@ build_variants() {
             exit 1
         fi
         cp "$VARIANT_DIR/build.config" .config
+
+        # Record requested packages before defconfig (it silently drops unknown ones)
+        REQUESTED_PKGS=$(grep '^CONFIG_PACKAGE_.*=y' .config | sed 's/=y//' | sort)
+
         make defconfig
         make defconfig
+
+        # Verify no requested packages were silently dropped
+        MISSING_PKGS=""
+        for pkg in $REQUESTED_PKGS; do
+            grep -q "^${pkg}=y" .config || MISSING_PKGS="$MISSING_PKGS ${pkg#CONFIG_PACKAGE_}"
+        done
+        if [ -n "$MISSING_PKGS" ]; then
+            echo ""
+            echo "ERROR: The following packages in $VARIANT_DIR/build.config were not found:"
+            for pkg in $MISSING_PKGS; do
+                echo "  - $pkg"
+            done
+            echo "Please update the build config or the OpenWrt/feeds version."
+            exit 1
+        fi
 
         # 3. Download sources
         DL_START=$(date +%s)
