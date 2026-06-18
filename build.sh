@@ -267,7 +267,8 @@ prepare_openwrt() {
         # Preserve dl/ cache if it exists (restored by CI cache step)
         [ -d openwrt/dl ] && mv openwrt/dl /tmp/openwrt-dl-backup
         rm -rf openwrt
-        git clone --depth 1 -b "$OPENWRT_BRANCH" "$OPENWRT_REPO" openwrt
+        # Full clone (no --depth) so merge-base works for three-dot PR diff
+        git clone -b "$OPENWRT_BRANCH" "$OPENWRT_REPO" openwrt
         [ -d /tmp/openwrt-dl-backup ] && mv /tmp/openwrt-dl-backup openwrt/dl
         cd openwrt
         OPENWRT_DIR="$(pwd)"
@@ -290,17 +291,16 @@ merge_pr_and_fix_caldata() {
     echo ""
     echo "=== Applying PR #21495 (ath11k smallbuffers + PZ-L8 WiFi) ==="
 
-    # Fetch the full PR branch so all PR commits are included in the diff.
-    # Previously we used FETCH_HEAD^..FETCH_HEAD which only covered the last commit,
-    # missing the first commit that adds ath11k-smallbuffers support.
-    git fetch origin "refs/pull/21495/head:pr-21495" 2>/dev/null || {
-        echo "ERROR: Failed to fetch PR #21495 branch"
+    # Fetch the PR commit (full history available since prepare_openwrt does full clone)
+    git fetch origin "$PR_21495_SHA" || {
+        echo "ERROR: Failed to fetch PR commit $PR_21495_SHA"
         exit 1
     }
 
-    # Diff from current HEAD (pinned OpenWrt) to PR branch head.
-    # This covers all PR commits, not just the last one.
-    if ! git diff HEAD..pr-21495 | git apply --3way; then
+    # Use three-dot diff to extract only PR #21495's own changes.
+    # git diff origin/main...PR_21495_SHA = diff from merge-base to PR_21495_SHA,
+    # which excludes unrelated OpenWrt changes between OPENWRT_SHA and PR's base.
+    if ! git diff "origin/$OPENWRT_BRANCH"..."$PR_21495_SHA" | git apply --3way; then
         echo "WARNING: git apply encountered conflicts."
         # Find all .rej files
         REJ_FILES=$(git ls-files --others --exclude-standard "*.rej" 2>/dev/null)
@@ -339,9 +339,6 @@ merge_pr_and_fix_caldata() {
         # Clean up any remaining .rej and .orig files
         find . \( -name "*.rej" -o -name "*.orig" \) -not -path "./.git/*" -delete 2>/dev/null || true
     fi
-
-    # Clean up the temporary branch ref
-    git branch -D pr-21495 2>/dev/null || true
 
     echo "=== PR #21495 patches applied ==="
 
