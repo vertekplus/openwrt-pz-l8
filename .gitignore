@@ -28,6 +28,8 @@ tool-results/
 *.tmp
 *.temp
 *.log
+*.json
+*.txt
 
 # Archives
 *.tar.gz
