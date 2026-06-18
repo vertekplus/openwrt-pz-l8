@@ -36,5 +36,7 @@ tool-results/
 *.tar.xz
 *.zip
 
-.gitmodules
-repo
+/repo/
+/openwrt/
+/qca-nss-dp/
+/qca-ssdk/
