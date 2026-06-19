@@ -234,7 +234,7 @@ jobs:
   release:
     name: Release
     needs: [check, build]
-    if: needs.check.outputs.skip-all != 'true' && inputs.release_tag != ''
+    if: always() && needs.check.outputs.skip-all != 'true' && inputs.release_tag != ''
     runs-on: ubuntu-latest
 
     steps:
