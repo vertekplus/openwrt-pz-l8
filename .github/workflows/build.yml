@@ -14,6 +14,7 @@
 # Trigger deduplication:
 #   - push: only branch pushes (tags excluded); skipped if an open PR exists for the branch
 #   - pull_request: draft PRs are skipped entirely
+#   - paths-ignore: doc/metadata-only changes don't trigger CI (no build impact)
 #   - concurrency group uses branch name as additional safety net
 #
 # Cache key is based on repo build files only (variants, patches, scripts, build.sh),
@@ -25,8 +26,24 @@ name: Build OpenWrt for CMCC PZ-L8
 on:
   push:
     branches: ['**']
+    paths-ignore:
+      - '**/*.md'
+      - '**/LICENSE'
+      - '**/LICENSE.*'
+      - '.gitignore'
+      - '.editorconfig'
+      - '.github/release-notes.md'
+      - 'docs/**'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - '**/*.md'
+      - '**/LICENSE'
+      - '**/LICENSE.*'
+      - '.gitignore'
+      - '.editorconfig'
+      - '.github/release-notes.md'
+      - 'docs/**'
   workflow_dispatch:
     inputs:
       release_tag:
