@@ -44,6 +44,16 @@ uci set network.lan.ipv6='auto'
 uci -q delete network.wan
 uci -q delete network.wan6
 
+# LED: remove default wan LED rule (AP has no WAN), add br-lan activity
+uci -q delete system.led_wan
+uci set system.led_lan=led
+uci set system.led_lan.name='Green'
+uci set system.led_lan.sysfs='green:wan'
+uci set system.led_lan.trigger='netdev'
+uci set system.led_lan.dev='br-lan'
+uci set system.led_lan.mode='link tx rx'
+uci set system.led_lan.default='0'
+
 uci commit network
 uci commit system
 
