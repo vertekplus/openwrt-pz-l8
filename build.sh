@@ -470,25 +470,49 @@ build_variants() {
         fi
         cp "$VARIANT_DIR/build.config" .config
 
-        # Record requested packages before defconfig (it silently drops unknown ones)
-        REQUESTED_PKGS=$(grep '^CONFIG_PACKAGE_.*=y' .config | sed 's/=y//' | sort)
+        # Config linter: detect packages dropped by defconfig
+        BEFORE_PKGS=$(grep '^CONFIG_PACKAGE_.*=y' .config | sed 's/=y//' | sort)
 
         make defconfig
         make defconfig
 
-        # Verify no requested packages were silently dropped
-        MISSING_PKGS=""
-        for pkg in $REQUESTED_PKGS; do
-            grep -q "^${pkg}=y" .config || MISSING_PKGS="$MISSING_PKGS ${pkg#CONFIG_PACKAGE_}"
-        done
-        if [ -n "$MISSING_PKGS" ]; then
-            echo ""
-            echo "ERROR: The following packages in $VARIANT_DIR/build.config were not found:"
-            for pkg in $MISSING_PKGS; do
-                echo "  - $pkg"
-            done
-            echo "Please update the build config or the OpenWrt/feeds version."
-            exit 1
+        AFTER_PKGS=$(grep '^CONFIG_PACKAGE_.*=y' .config | sed 's/=y//' | sort)
+        DROPPED_PKGS=$(comm -23 <(echo "$BEFORE_PKGS") <(echo "$AFTER_PKGS"))
+
+        if [ -n "$DROPPED_PKGS" ]; then
+            NOT_IN_FEEDS=""
+            DROPPED_BY_DEFCONFIG=""
+            while IFS= read -r pkg; do
+                pkg_name="${pkg#CONFIG_PACKAGE_}"
+                if ./scripts/feeds search "$pkg_name" >/dev/null 2>&1; then
+                    DROPPED_BY_DEFCONFIG="$DROPPED_BY_DEFCONFIG $pkg_name"
+                else
+                    NOT_IN_FEEDS="$NOT_IN_FEEDS $pkg_name"
+                fi
+            done <<< "$DROPPED_PKGS"
+
+            ERRORS=""
+            if [ -n "$NOT_IN_FEEDS" ]; then
+                ERRORS="$ERRORS\nPackages not available in feeds (typos or removed):"
+                for pkg in $NOT_IN_FEEDS; do
+                    ERRORS="$ERRORS\n  - $pkg"
+                done
+            fi
+
+            if [ -n "$DROPPED_BY_DEFCONFIG" ]; then
+                ERRORS="$ERRORS\nPackages dropped by defconfig (dependency conflicts or disabled by config):"
+                for pkg in $DROPPED_BY_DEFCONFIG; do
+                    ERRORS="$ERRORS\n  - $pkg"
+                done
+            fi
+
+            if [ -n "$ERRORS" ]; then
+                echo ""
+                echo "ERROR: Package mismatch in $VARIANT_DIR/build.config:"
+                echo -e "$ERRORS"
+                echo "Please update the build config or the OpenWrt/feeds version."
+                exit 1
+            fi
         fi
 
         # 3. Download sources
