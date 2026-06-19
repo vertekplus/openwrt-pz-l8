@@ -44,7 +44,7 @@ for _d in "$PROJECT_ROOT/variants"/*/; do
 done
 DEFAULT_VARIANTS="${DEFAULT_VARIANTS# }"
 if [ -z "$DEFAULT_VARIANTS" ]; then
-    echo "ERROR: No variants found. Create variants/<name>/build.config files."
+    echo "::error::No variants found. Create variants/<name>/build.config files."
     exit 1
 fi
 
@@ -173,7 +173,7 @@ install_deps_alpine() {
 install_deps_macos() {
     echo "=== Checking Homebrew dependencies (macOS) ==="
     if ! command -v brew &>/dev/null; then
-        echo "ERROR: Homebrew is required. Install from https://brew.sh"
+        echo "::error::Homebrew is required. Install from https://brew.sh"
         exit 1
     fi
     brew install --quiet gcc llvm flex bison gawk gnu-sed \
@@ -192,11 +192,11 @@ install_deps() {
         alpine)       install_deps_alpine ;;
         macos)        install_deps_macos ;;
         windows)
-            echo "ERROR: Native Windows is not supported. Please use WSL2."
+            echo "::error::Native Windows is not supported. Please use WSL2."
             exit 1
             ;;
         *)
-            echo "WARNING: Unsupported OS '$(uname -s)'. Install dependencies manually."
+            echo "::warning::Unsupported OS '$(uname -s)'. Install dependencies manually."
             echo "See: https://openwrt.org/docs/guide-developer/build-system/install-buildsystem"
             return
             ;;
@@ -213,7 +213,7 @@ check_disk_space() {
     esac
     avail_gb="${avail_gb%G*}"
     if [ "${avail_gb:-0}" -lt 25 ]; then
-        echo "WARNING: Less than 25 GB free disk space (${avail_gb} GB available)."
+        echo "::warning::Less than 25 GB free disk space (${avail_gb} GB available)."
         echo "         Build may fail. Consider freeing disk space."
     fi
 }
@@ -256,7 +256,7 @@ setup_ccache() {
 prepare_openwrt() {
     if [ -n "$OPENWRT_DIR" ]; then
         if [ ! -d "$OPENWRT_DIR/.git" ]; then
-            echo "ERROR: $OPENWRT_DIR is not a git repository"
+            echo "::error::$OPENWRT_DIR is not a git repository"
             exit 1
         fi
         echo "=== Using existing OpenWrt tree: $OPENWRT_DIR ==="
@@ -293,7 +293,7 @@ merge_pr_and_fix_caldata() {
 
     # Fetch the PR commit (full history available since prepare_openwrt does full clone)
     git fetch origin "$PR_21495_SHA" || {
-        echo "ERROR: Failed to fetch PR commit $PR_21495_SHA"
+        echo "::error::Failed to fetch PR commit $PR_21495_SHA"
         exit 1
     }
 
@@ -301,7 +301,7 @@ merge_pr_and_fix_caldata() {
     # git diff origin/main...PR_21495_SHA = diff from merge-base to PR_21495_SHA,
     # which excludes unrelated OpenWrt changes between OPENWRT_SHA and PR's base.
     if ! git diff "origin/$OPENWRT_BRANCH"..."$PR_21495_SHA" | git apply --3way; then
-        echo "WARNING: git apply encountered conflicts."
+        echo "::warning::git apply encountered conflicts."
         # Find all .rej files
         REJ_FILES=$(git ls-files --others --exclude-standard "*.rej" 2>/dev/null)
         if [ -z "$REJ_FILES" ]; then
@@ -313,7 +313,7 @@ merge_pr_and_fix_caldata() {
             if git diff --quiet; then
                 echo "No actual changes detected, continuing."
             else
-                echo "ERROR: Conflict detected but no .rej files. Manual intervention needed."
+                echo "::error::Conflict detected but no .rej files. Manual intervention needed."
                 exit 1
             fi
         else
@@ -331,7 +331,7 @@ merge_pr_and_fix_caldata() {
                 esac
             done
             if [ -n "$NON_CALDATA_REJ" ]; then
-                echo "ERROR: Non-caldata conflict(s):$NON_CALDATA_REJ"
+                echo "::error::Non-caldata conflict(s):$NON_CALDATA_REJ"
                 echo "Please check if OPENWRT_SHA or PR_21495_SHA needs updating."
                 exit 1
             fi
@@ -357,7 +357,7 @@ apply_fm25ls01_patch() {
     PATCH_DST="$PATCH_DIR/440-v6.12-mtd-spinand-add-support-for-FudanMicro-FM25LS01.patch"
 
     if [ ! -f "$PATCH_SRC" ]; then
-        echo "ERROR: FM25LS01 patch not found at $PATCH_SRC"
+        echo "::error::FM25LS01 patch not found at $PATCH_SRC"
         exit 1
     fi
 
@@ -424,7 +424,7 @@ download_toolchain() {
                 cp -a "$TOOLCHAIN_SRC" staging_dir/
                 echo "=== Precompiled toolchain installed ==="
             else
-                echo "WARNING: No toolchain found in extracted archive, will compile from source"
+                echo "::warning::No toolchain found in extracted archive, will compile from source"
                 echo "Top-level contents:"
                 ls "$SEARCH_ROOT/" | head -10
             fi
@@ -465,7 +465,7 @@ build_variants() {
 
         # 2. Generate configuration
         if [ ! -f "$VARIANT_DIR/build.config" ]; then
-            echo "ERROR: Config not found: $VARIANT_DIR/build.config"
+            echo "::error file=$VARIANT_DIR/build.config::Config file not found"
             exit 1
         fi
         cp "$VARIANT_DIR/build.config" .config
@@ -491,25 +491,22 @@ build_variants() {
                 fi
             done <<< "$DROPPED_PKGS"
 
-            ERRORS=""
-            if [ -n "$NOT_IN_FEEDS" ]; then
-                ERRORS="$ERRORS\nPackages not available in feeds (typos or removed):"
-                for pkg in $NOT_IN_FEEDS; do
-                    ERRORS="$ERRORS\n  - $pkg"
-                done
-            fi
+            CI_FILE="$VARIANT_DIR/build.config"
+            CI_ERROR=false
 
-            if [ -n "$DROPPED_BY_DEFCONFIG" ]; then
-                ERRORS="$ERRORS\nPackages dropped by defconfig (dependency conflicts or disabled by config):"
-                for pkg in $DROPPED_BY_DEFCONFIG; do
-                    ERRORS="$ERRORS\n  - $pkg"
-                done
-            fi
+            for pkg in $NOT_IN_FEEDS; do
+                echo "::error file=$CI_FILE::package not available in feeds (typo or removed): $pkg"
+                CI_ERROR=true
+            done
 
-            if [ -n "$ERRORS" ]; then
+            for pkg in $DROPPED_BY_DEFCONFIG; do
+                echo "::error file=$CI_FILE::package dropped by defconfig (dependency conflict or disabled): $pkg"
+                CI_ERROR=true
+            done
+
+            if [ "$CI_ERROR" = true ]; then
                 echo ""
-                echo "ERROR: Package mismatch in $VARIANT_DIR/build.config:"
-                echo -e "$ERRORS"
+                echo "ERROR: Package mismatch in $VARIANT_DIR/build.config."
                 echo "Please update the build config or the OpenWrt/feeds version."
                 exit 1
             fi
@@ -521,7 +518,7 @@ build_variants() {
             echo "Download attempt $i/3..."
             if make download -j"$JOBS" V=s; then break; fi
             if [ $i -eq 3 ]; then
-                echo "ERROR: Download failed after 3 attempts"
+                echo "::error::Download failed after 3 attempts"
                 exit 1
             fi
             sleep 30
