@@ -81,9 +81,19 @@ jobs:
           if [ "${{ github.event_name }}" = 'push' ]; then
             # Skip if an open PR exists for this branch (PR CI will cover it)
             BRANCH="${GITHUB_REF_NAME}"
-            PRS=$(curl -sf -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            # Fail-open: if the GitHub API call fails (rate limit, network, 5xx),
+            # treat PR count as 0 so push CI still runs (worst case: redundant
+            # run deduped by artifact cache). This avoids false-negative where
+            # a push would have NO CI coverage due to a transient API error.
+            RESPONSE=$(curl -sf -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               "${{ github.api_url }}/repos/${{ github.repository }}/pulls?head=${{ github.repository_owner }}:${BRANCH}&state=open" \
-              | jq 'length')
+              2>/dev/null) || RESPONSE='[]'
+            PRS=$(echo "$RESPONSE" | jq 'length' 2>/dev/null || echo 0)
+            # Guard against non-numeric output (e.g. jq parse error returning null)
+            if ! [[ "$PRS" =~ ^[0-9]+$ ]]; then
+              echo "::warning::Gate API returned unparseable response, falling back to PRS=0 (fail-open)"
+              PRS=0
+            fi
             if [ "$PRS" -gt 0 ]; then
               SKIP=true
               echo "::notice::Skipping push CI: $PRS open PR(s) for branch $BRANCH (PR CI will run instead)"
@@ -117,15 +127,25 @@ jobs:
           FOUND=false
           ARTIFACT_ID=""
 
+          # Fail-safe: if the artifacts API call fails (rate limit, network, 5xx),
+          # treat it as "no existing artifact found" so build proceeds (worst case:
+          # a redundant build). This avoids false-negative where a build would be
+          # skipped due to a transient API error.
           RESPONSE=$(curl -sf -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "${{ github.api_url }}/repos/${{ github.repository }}/actions/artifacts?per_page=5&name=$ARTIFACT_NAME")
+            "${{ github.api_url }}/repos/${{ github.repository }}/actions/artifacts?per_page=5&name=$ARTIFACT_NAME" \
+            2>/dev/null) || RESPONSE='{"artifacts":[]}'
 
           # Find first non-expired artifact
-          ARTIFACT_ID=$(echo "$RESPONSE" | jq -r '(.artifacts // [] | map(select(.expired == false)) | first | .id) // empty')
-          if [ -n "$ARTIFACT_ID" ]; then
+          ARTIFACT_ID=$(echo "$RESPONSE" | jq -r '(.artifacts // [] | map(select(.expired == false)) | first | .id) // empty' 2>/dev/null)
+          if [ -n "$ARTIFACT_ID" ] && [ "$ARTIFACT_ID" != "null" ]; then
             FOUND=true
-            CREATED=$(echo "$RESPONSE" | jq -r '(.artifacts // [] | map(select(.expired == false)) | first | .created_at) // empty')
+            CREATED=$(echo "$RESPONSE" | jq -r '(.artifacts // [] | map(select(.expired == false)) | first | .created_at) // empty' 2>/dev/null)
             echo "::notice::Found existing artifact $ARTIFACT_NAME (ID: $ARTIFACT_ID, created: $CREATED)"
+          else
+            # Distinguish "no artifact found" from "API failed to parse"
+            if ! echo "$RESPONSE" | jq -e '.artifacts' >/dev/null 2>&1; then
+              echo "::warning::Artifacts API returned unparseable response, assuming no cache hit (fail-safe)"
+            fi
           fi
           echo "found=$FOUND" >> "$GITHUB_OUTPUT"
           echo "artifact-id=$ARTIFACT_ID" >> "$GITHUB_OUTPUT"
