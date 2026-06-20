@@ -340,7 +340,7 @@ merge_pr_and_fix_caldata() {
     #   - patch has explicit context validation (fails fast if caldata file
     #     structure changed, with .rej file for debugging)
     #   - patch is more readable and reviewable than awk logic
-    #   - consistent with patches/001-add-fm25ls01-support.patch in this repo
+    #   - consistent with patches/001-fm25ls01-support.patch in this repo
     CALDATA_PATCH="$PROJECT_ROOT/patches/002-pz-l8-caldata.patch"
     echo "=== Applying caldata patch ==="
     if ! git apply "$CALDATA_PATCH"; then
@@ -367,7 +367,7 @@ apply_fm25ls01_patch() {
     echo ""
     echo "=== Adding FM25LS01 SPI NAND support (V2 hardware) ==="
     PATCH_DIR=target/linux/generic/backport-6.12
-    PATCH_SRC="$PROJECT_ROOT/patches/001-add-fm25ls01-support.patch"
+    PATCH_SRC="$PROJECT_ROOT/patches/001-fm25ls01-support.patch"
     PATCH_DST="$PATCH_DIR/440-v6.12-mtd-spinand-add-support-for-FudanMicro-FM25LS01.patch"
 
     if [ ! -f "$PATCH_SRC" ]; then
