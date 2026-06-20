@@ -470,46 +470,40 @@ build_variants() {
         fi
         cp "$VARIANT_DIR/build.config" .config
 
-        # Config linter: detect packages dropped by defconfig
-        BEFORE_PKGS=$(grep '^CONFIG_PACKAGE_.*=y' .config | sed 's/=y//' | sort)
+        # Strict config validation via kconfig's native strict mode.
+        # - KCONFIG_WARN_UNKNOWN_SYMBOLS=1: warn on any CONFIG_X in .config that
+        #   kconfig doesn't recognize (typos, removed packages, wrong target, etc.)
+        # - KCONFIG_WERROR=1: treat those warnings as errors (non-zero exit)
+        # This replaces the previous BEFORE/AFTER diff linter which only covered
+        # CONFIG_PACKAGE_*=y and missed CONFIG_TARGET_*, CONFIG_KERNEL_*, =m,
+        # value changes, and multi-target conflicts. Kconfig's own symbol table
+        # is the authoritative source of truth.
+        # Note: must run AFTER prepare_openwrt + merge_pr_and_fix_caldata +
+        # update_feeds, otherwise patch-introduced symbols would false-positive.
+        export KCONFIG_WARN_UNKNOWN_SYMBOLS=1
+        export KCONFIG_WERROR=1
 
+        if ! make defconfig; then
+            echo ""
+            echo "::error file=$VARIANT_DIR/build.config::Config validation failed (see kconfig warnings above)"
+            echo "Common causes:"
+            echo "  - Typo in CONFIG_X name (check spelling against OpenWrt Config.in)"
+            echo "  - Package removed/renamed in current OpenWrt/feeds version"
+            echo "  - Wrong target/device for this branch"
+            echo "  - Invalid value (must be y/m/n/\"string\"/number; first char matters)"
+            exit 1
+        fi
+
+        # Run defconfig a second time to ensure dependency convergence.
+        # If the second run changes .config, that indicates unstable config
+        # (dependency cycle or incomplete resolution) - treat as error.
+        cp .config /tmp/.config-first-pass
         make defconfig
-        make defconfig
-
-        AFTER_PKGS=$(grep '^CONFIG_PACKAGE_.*=y' .config | sed 's/=y//' | sort)
-        DROPPED_PKGS=$(comm -23 <(echo "$BEFORE_PKGS") <(echo "$AFTER_PKGS"))
-
-        if [ -n "$DROPPED_PKGS" ]; then
-            NOT_IN_FEEDS=""
-            DROPPED_BY_DEFCONFIG=""
-            while IFS= read -r pkg; do
-                pkg_name="${pkg#CONFIG_PACKAGE_}"
-                if ./scripts/feeds search "$pkg_name" >/dev/null 2>&1; then
-                    DROPPED_BY_DEFCONFIG="$DROPPED_BY_DEFCONFIG $pkg_name"
-                else
-                    NOT_IN_FEEDS="$NOT_IN_FEEDS $pkg_name"
-                fi
-            done <<< "$DROPPED_PKGS"
-
-            CI_FILE="$VARIANT_DIR/build.config"
-            CI_ERROR=false
-
-            for pkg in $NOT_IN_FEEDS; do
-                echo "::error file=$CI_FILE::package not available in feeds (typo or removed): $pkg"
-                CI_ERROR=true
-            done
-
-            for pkg in $DROPPED_BY_DEFCONFIG; do
-                echo "::error file=$CI_FILE::package dropped by defconfig (dependency conflict or disabled): $pkg"
-                CI_ERROR=true
-            done
-
-            if [ "$CI_ERROR" = true ]; then
-                echo ""
-                echo "ERROR: Package mismatch in $VARIANT_DIR/build.config."
-                echo "Please update the build config or the OpenWrt/feeds version."
-                exit 1
-            fi
+        if ! diff -q /tmp/.config-first-pass .config >/dev/null; then
+            echo "::error file=$VARIANT_DIR/build.config::defconfig did not converge (2nd run changed .config)"
+            echo "This indicates unstable config - check for dependency conflicts."
+            diff /tmp/.config-first-pass .config | head -30
+            exit 1
         fi
 
         # 3. Download sources
