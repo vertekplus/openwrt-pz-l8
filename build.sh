@@ -303,13 +303,9 @@ merge_pr_and_fix_caldata() {
     #
     # Exclude the ath11k caldata hotplug script from PR apply. PR #21495 adds
     # cmcc,pz-l8 entries to it but in a "bare" form (caldata_extract only,
-    # no MAC patch). We let fix-caldata.sh handle cmcc,pz-l8 entirely on its
-    # own (insert mode), so that:
-    #   - PR's caldata writing style changes (shared case vs standalone case,
-    #     different offsets, new patch steps) don't break fix-caldata.sh
-    #   - fix-caldata.sh depends only on OpenWrt main's caldata file structure
-    #     (which is much more stable than PR's writing style)
-    #   - CI log shows "Skipped patch '...11-ath11k-caldata'." for observability
+    # no MAC patch). We apply our own caldata patch (patches/001-pz-l8-caldata-mac.patch)
+    # afterwards which inserts cmcc,pz-l8 case blocks with full MAC patch.
+    # This decouples our caldata handling from PR's writing style.
     if ! git diff "origin/$OPENWRT_BRANCH"..."$PR_21495_SHA" \
             | git apply --3way \
                 --exclude='target/linux/qualcommax/ipq50xx/base-files/etc/hotplug.d/firmware/11-ath11k-caldata'; then
@@ -319,46 +315,52 @@ merge_pr_and_fix_caldata() {
         if [ -z "$REJ_FILES" ]; then
             REJ_FILES=$(find . -name "*.rej" -not -path "./.git/*" 2>/dev/null)
         fi
-        if [ -z "$REJ_FILES" ]; then
-            echo "No .rej files found, checking for other conflict indicators..."
-            # git apply --3way may leave stage conflicts
-            if git diff --quiet; then
-                echo "No actual changes detected, continuing."
-            else
-                echo "::error::Conflict detected but no .rej files. Manual intervention needed."
-                exit 1
-            fi
-        else
-            NON_CALDATA_REJ=""
-            for rej in $REJ_FILES; do
-                case "$rej" in
-                    *11-ath11k-caldata.rej)
-                        echo "  Caldata conflict detected: $rej"
-                        # Caldata conflict is expected: fix-caldata.sh will handle it
-                        rm -f "$rej"
-                        ;;
-                    *)
-                        NON_CALDATA_REJ="$NON_CALDATA_REJ $rej"
-                        ;;
-                esac
-            done
-            if [ -n "$NON_CALDATA_REJ" ]; then
-                echo "::error::Non-caldata conflict(s):$NON_CALDATA_REJ"
-                echo "Please check if OPENWRT_SHA or PR_21495_SHA needs updating."
-                exit 1
-            fi
+        if [ -n "$REJ_FILES" ]; then
+            echo "::error::PR apply conflicts detected:$REJ_FILES"
+            echo "Please check if OPENWRT_SHA or PR_21495_SHA needs updating."
+            exit 1
         fi
-        # Clean up any remaining .rej and .orig files
-        find . \( -name "*.rej" -o -name "*.orig" \) -not -path "./.git/*" -delete 2>/dev/null || true
+        # No .rej files - check if there are actual changes
+        if ! git diff --quiet; then
+            echo "::error::Conflict detected but no .rej files. Manual intervention needed."
+            exit 1
+        fi
+        echo "No actual changes detected, continuing."
     fi
 
     echo "=== PR #21495 patches applied ==="
 
-    # Enhance caldata entries added by PR with MAC/regdomain/macflag patches.
+    # Apply our caldata patch on the clean OpenWrt main caldata file (PR was
+    # excluded above). This inserts cmcc,pz-l8 case blocks with full MAC
+    # patch (caldata_extract + label_mac + ath11k_patch_mac + remove_regdomain
+    # + set_macflag) for both 2.4GHz (IPQ5018, offset 0x1000, MAC +2) and
+    # 5GHz (QCN6122, offset 0x26800, MAC +3).
+    #
+    # Using a patch file instead of a script because:
+    #   - patch has explicit context validation (fails fast if caldata file
+    #     structure changed, with .rej file for debugging)
+    #   - patch is more readable and reviewable than awk logic
+    #   - consistent with patches/add-fm25ls01-support.patch in this repo
+    CALDATA_PATCH="$PROJECT_ROOT/patches/001-pz-l8-caldata-mac.patch"
+    echo "=== Applying caldata MAC patch ==="
+    if ! git apply "$CALDATA_PATCH"; then
+        echo "::error::Caldata patch failed to apply."
+        echo "This usually means OpenWrt main's caldata file structure changed."
+        echo "Regenerate patches/001-pz-l8-caldata-mac.patch against the new caldata file:"
+        echo "  1. Edit target/linux/qualcommax/ipq50xx/base-files/etc/hotplug.d/firmware/11-ath11k-caldata"
+        echo "  2. Insert cmcc,pz-l8 case blocks (see patch file for expected content)"
+        echo "  3. git diff -- <caldata-file> > patches/001-pz-l8-caldata-mac.patch"
+        exit 1
+    fi
+
+    # Sanity check: verify cmcc,pz-l8 has the MAC patch (not just caldata_extract)
     CALDATA=target/linux/qualcommax/ipq50xx/base-files/etc/hotplug.d/firmware/11-ath11k-caldata
-    echo "=== Applying fix-caldata.sh ==="
-    chmod +x "$PROJECT_ROOT/scripts/fix-caldata.sh"
-    "$PROJECT_ROOT/scripts/fix-caldata.sh" "$CALDATA"
+    if [ "$(grep -c 'ath11k_patch_mac.*label_mac' "$CALDATA")" -lt 2 ]; then
+        echo "::error::Caldata patch applied but MAC patch missing or incomplete."
+        echo "Expected 2 ath11k_patch_mac calls (2.4GHz + 5GHz), found $(grep -c 'ath11k_patch_mac.*label_mac' "$CALDATA")."
+        exit 1
+    fi
+    echo "=== Caldata MAC patch applied (2.4GHz + 5GHz) ==="
 }
 
 apply_fm25ls01_patch() {

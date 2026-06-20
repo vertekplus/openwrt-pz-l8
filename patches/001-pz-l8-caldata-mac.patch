@@ -1,0 +1,54 @@
+From: CrazyBoyFeng <crazyboyfeng@gmail.com>
+Subject: [PATCH] qualcommax: ipq50xx: pz-l8: add caldata entries with MAC patch
+
+PR #21495 adds cmcc,pz-l8 to the ath11k caldata hotplug script but in a
+"bare" form (caldata_extract only, no MAC patch). This causes ath11k to
+use a random MAC on every boot for both 2.4GHz and 5GHz.
+
+This patch inserts cmcc,pz-l8 case blocks with the full MAC patch:
+  - 2.4GHz (IPQ5018): offset 0x1000, MAC = label_mac + 2
+  - 5GHz (QCN6122):   offset 0x26800, MAC = label_mac + 3
+
+label_mac is read from offset 0 of the ART partition (the device's base
+MAC). The +2/+3 offsets follow the convention used by other ipq50xx
+devices (e.g. yuncore,ax830 uses +2 for 2.4GHz, linksys,mx6200 uses +2
+for 2.4GHz and +3 for 5GHz).
+
+This patch is applied AFTER PR #21495 (which is applied with --exclude
+for this caldata file), so it runs against a clean OpenWrt main caldata
+file. The insert mode (vs replace mode) decouples this patch from PR
+#21495's caldata writing style — PR can change how it adds cmcc,pz-l8
+without affecting this patch.
+
+Signed-off-by: CrazyBoyFeng <crazyboyfeng@gmail.com>
+
+--- a/target/linux/qualcommax/ipq50xx/base-files/etc/hotplug.d/firmware/11-ath11k-caldata
++++ b/target/linux/qualcommax/ipq50xx/base-files/etc/hotplug.d/firmware/11-ath11k-caldata
+@@ -51,6 +51,13 @@ case "$FIRMWARE" in
+ 		caldata_extract "0:art" 0x1000 0x20000
+ 		;;
+ 	yuncore,ax830|\
++	cmcc,pz-l8)
++		caldata_extract "0:art" 0x1000 0x20000
++		label_mac=$(mtd_get_mac_binary 0:art 0)
++		ath11k_patch_mac $(macaddr_add $label_mac 2) 0
++		ath11k_remove_regdomain
++		ath11k_set_macflag
++		;;
+ 	yuncore,ax850)
+ 		caldata_extract "0:ART" 0x1000 0x20000
+ 		label_mac=$(mtd_get_mac_binary 0:ART 0)
+@@ -98,6 +105,13 @@ case "$FIRMWARE" in
+ 		ath11k_remove_regdomain
+ 		ath11k_set_macflag
+ 		;;
++	cmcc,pz-l8)
++		caldata_extract "0:art" 0x26800 0x20000
++		label_mac=$(mtd_get_mac_binary 0:art 0)
++		ath11k_patch_mac $(macaddr_add $label_mac 3) 0
++		ath11k_remove_regdomain
++		ath11k_set_macflag
++		;;
+ 	yuncore,ax830)
+ 		caldata_extract "0:ART" 0x4c000 0x20000
+ 		label_mac=$(mtd_get_mac_binary 0:ART 0)
