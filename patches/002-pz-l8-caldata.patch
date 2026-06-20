@@ -1,13 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: CrazyBoyFeng <crazyboyfeng@gmail.com>
-Subject: [PATCH] qualcommax: ipq50xx: pz-l8: add caldata entries with MAC patch
+Date: Fri, 20 Jun 2026 00:00:00 +0800
+Subject: [PATCH] qualcommax: ipq50xx: pz-l8: add caldata entries
 
 PR #21495 adds cmcc,pz-l8 to the ath11k caldata hotplug script but in a
-"bare" form (caldata_extract only, no MAC patch). This causes ath11k to
-use a random MAC on every boot for both 2.4GHz and 5GHz.
+"bare" form (caldata_extract only). This is incomplete - ath11k needs
+the full caldata handling sequence (caldata_extract + MAC patching +
+regdomain removal + macflag setting) to work correctly. Without it,
+ath11k uses a random MAC on every boot and may have wrong regdomain.
 
-This patch inserts cmcc,pz-l8 case blocks with the full MAC patch:
+This patch inserts cmcc,pz-l8 case blocks with the full caldata
+handling for both radios:
   - 2.4GHz (IPQ5018): offset 0x1000, MAC = label_mac + 2
   - 5GHz (QCN6122):   offset 0x26800, MAC = label_mac + 3
+
+The caldata handling sequence per radio:
+  1. caldata_extract: extract caldata from ART partition
+  2. label_mac:       read base MAC from offset 0 of ART
+  3. ath11k_patch_mac: patch MAC into caldata (offset +2/+3 from base)
+  4. ath11k_remove_regdomain: remove hardcoded regdomain from caldata
+  5. ath11k_set_macflag: set macflag for proper MAC handling
 
 label_mac is read from offset 0 of the ART partition (the device's base
 MAC). The +2/+3 offsets follow the convention used by other ipq50xx
@@ -17,17 +29,19 @@ for 2.4GHz and +3 for 5GHz).
 This patch is applied AFTER PR #21495 (which is applied with --exclude
 for this caldata file), so it runs against a clean OpenWrt main caldata
 file. The insert mode (vs replace mode) decouples this patch from PR
-#21495's caldata writing style — PR can change how it adds cmcc,pz-l8
+#21495's caldata writing style - PR can change how it adds cmcc,pz-l8
 without affecting this patch.
 
 Signed-off-by: CrazyBoyFeng <crazyboyfeng@gmail.com>
 
+diff --git a/target/linux/qualcommax/ipq50xx/base-files/etc/hotplug.d/firmware/11-ath11k-caldata b/target/linux/qualcommax/ipq50xx/base-files/etc/hotplug.d/firmware/11-ath11k-caldata
+index dbe13c5475..2305d90f02 100644
 --- a/target/linux/qualcommax/ipq50xx/base-files/etc/hotplug.d/firmware/11-ath11k-caldata
 +++ b/target/linux/qualcommax/ipq50xx/base-files/etc/hotplug.d/firmware/11-ath11k-caldata
 @@ -51,6 +51,13 @@ case "$FIRMWARE" in
+ 	xiaomi,redmi-ax5400)
  		caldata_extract "0:art" 0x1000 0x20000
  		;;
- 	yuncore,ax830|\
 +	cmcc,pz-l8)
 +		caldata_extract "0:art" 0x1000 0x20000
 +		label_mac=$(mtd_get_mac_binary 0:art 0)
@@ -35,9 +49,9 @@ Signed-off-by: CrazyBoyFeng <crazyboyfeng@gmail.com>
 +		ath11k_remove_regdomain
 +		ath11k_set_macflag
 +		;;
+ 	yuncore,ax830|\
  	yuncore,ax850)
  		caldata_extract "0:ART" 0x1000 0x20000
- 		label_mac=$(mtd_get_mac_binary 0:ART 0)
 @@ -98,6 +105,13 @@ case "$FIRMWARE" in
  		ath11k_remove_regdomain
  		ath11k_set_macflag

@@ -331,25 +331,25 @@ merge_pr_and_fix_caldata() {
     echo "=== PR #21495 patches applied ==="
 
     # Apply our caldata patch on the clean OpenWrt main caldata file (PR was
-    # excluded above). This inserts cmcc,pz-l8 case blocks with full MAC
-    # patch (caldata_extract + label_mac + ath11k_patch_mac + remove_regdomain
-    # + set_macflag) for both 2.4GHz (IPQ5018, offset 0x1000, MAC +2) and
-    # 5GHz (QCN6122, offset 0x26800, MAC +3).
+    # excluded above). This inserts cmcc,pz-l8 case blocks with full caldata
+    # handling (caldata_extract + label_mac + ath11k_patch_mac +
+    # remove_regdomain + set_macflag) for both 2.4GHz (IPQ5018, offset 0x1000,
+    # MAC +2) and 5GHz (QCN6122, offset 0x26800, MAC +3).
     #
     # Using a patch file instead of a script because:
     #   - patch has explicit context validation (fails fast if caldata file
     #     structure changed, with .rej file for debugging)
     #   - patch is more readable and reviewable than awk logic
-    #   - consistent with patches/add-fm25ls01-support.patch in this repo
-    CALDATA_PATCH="$PROJECT_ROOT/patches/001-pz-l8-caldata-mac.patch"
-    echo "=== Applying caldata MAC patch ==="
+    #   - consistent with patches/001-add-fm25ls01-support.patch in this repo
+    CALDATA_PATCH="$PROJECT_ROOT/patches/002-pz-l8-caldata.patch"
+    echo "=== Applying caldata patch ==="
     if ! git apply "$CALDATA_PATCH"; then
         echo "::error::Caldata patch failed to apply."
         echo "This usually means OpenWrt main's caldata file structure changed."
-        echo "Regenerate patches/001-pz-l8-caldata-mac.patch against the new caldata file:"
+        echo "Regenerate patches/002-pz-l8-caldata.patch against the new caldata file:"
         echo "  1. Edit target/linux/qualcommax/ipq50xx/base-files/etc/hotplug.d/firmware/11-ath11k-caldata"
         echo "  2. Insert cmcc,pz-l8 case blocks (see patch file for expected content)"
-        echo "  3. git diff -- <caldata-file> > patches/001-pz-l8-caldata-mac.patch"
+        echo "  3. git diff -- <caldata-file> > patches/002-pz-l8-caldata.patch"
         exit 1
     fi
 
@@ -360,14 +360,14 @@ merge_pr_and_fix_caldata() {
         echo "Expected 2 ath11k_patch_mac calls (2.4GHz + 5GHz), found $(grep -c 'ath11k_patch_mac.*label_mac' "$CALDATA")."
         exit 1
     fi
-    echo "=== Caldata MAC patch applied (2.4GHz + 5GHz) ==="
+    echo "=== Caldata patch applied (2.4GHz + 5GHz) ==="
 }
 
 apply_fm25ls01_patch() {
     echo ""
     echo "=== Adding FM25LS01 SPI NAND support (V2 hardware) ==="
     PATCH_DIR=target/linux/generic/backport-6.12
-    PATCH_SRC="$PROJECT_ROOT/patches/add-fm25ls01-support.patch"
+    PATCH_SRC="$PROJECT_ROOT/patches/001-add-fm25ls01-support.patch"
     PATCH_DST="$PATCH_DIR/440-v6.12-mtd-spinand-add-support-for-FudanMicro-FM25LS01.patch"
 
     if [ ! -f "$PATCH_SRC" ]; then
