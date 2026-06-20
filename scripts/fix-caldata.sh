@@ -42,10 +42,38 @@ if [ "$MODE" = "replace" ]; then
     # For each section, pass through lines until we see "cmcc,pz-l8)", then
     # skip the original body until ";;", and emit our full entry instead.
     # Track sections by the caldata file path strings.
+    # PR #21495 adds cmcc,pz-l8 in two different forms:
+    #   - 2.4GHz section: "cmcc,pz-l8|\" as the FIRST line of a shared case
+    #     block (sharing caldata_extract with xiaomi,ax6000/redmi-ax5400).
+    #     This case has NO MAC patch — needs to be split out into its own
+    #     block with full MAC patch.
+    #   - 5GHz section: "cmcc,pz-l8)" as a standalone case block (also
+    #     without MAC patch). Needs content replacement.
+    #
+    # The original awk regex only matched lines ending with ")" and missed
+    # the 2.4GHz "cmcc,pz-l8|\" form, leaving 2.4GHz without a MAC patch
+    # and causing ath11k to use a random MAC on every boot.
     awk '
     /"ath11k\/IPQ5018\/hw1\.0\/cal-ahb-c000000\.wifi\.bin"/ { in_24ghz = 1; in_5ghz = 0 }
     /"ath11k\/QCN6122\/hw1\.0\/cal-ahb-b00a040\.wifi\.bin"/ { in_5ghz = 1; in_24ghz = 0 }
 
+    # Handle 2.4GHz shared case: "cmcc,pz-l8|\" as first line of shared block
+    # Drop this line and emit a standalone cmcc,pz-l8 block BEFORE the
+    # remaining shared case (xiaomi,ax6000|redmi-ax5400).
+    in_24ghz && /^[ \t]*cmcc,pz-l8\|\\$/ && !done_24_shared {
+        print "\tcmcc,pz-l8)"
+        print "\t\tcaldata_extract \"0:art\" 0x1000 0x20000"
+        print "\t\tlabel_mac=$(mtd_get_mac_binary 0:art 0)"
+        print "\t\tath11k_patch_mac $(macaddr_add $label_mac 2) 0"
+        print "\t\tath11k_remove_regdomain"
+        print "\t\tath11k_set_macflag"
+        print "\t\t;;"
+        done_24_shared = 1
+        next
+    }
+
+    # Handle standalone case block: "cmcc,pz-l8)" (used in 5GHz, and in 2.4GHz
+    # if PR author had used standalone form)
     /^[ \t]*cmcc,pz-l8\)/ {
         in_block = 1
         print
