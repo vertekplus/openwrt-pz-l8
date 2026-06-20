@@ -300,7 +300,19 @@ merge_pr_and_fix_caldata() {
     # Use three-dot diff to extract only PR #21495's own changes.
     # git diff origin/main...PR_21495_SHA = diff from merge-base to PR_21495_SHA,
     # which excludes unrelated OpenWrt changes between OPENWRT_SHA and PR's base.
-    if ! git diff "origin/$OPENWRT_BRANCH"..."$PR_21495_SHA" | git apply --3way; then
+    #
+    # Exclude the ath11k caldata hotplug script from PR apply. PR #21495 adds
+    # cmcc,pz-l8 entries to it but in a "bare" form (caldata_extract only,
+    # no MAC patch). We let fix-caldata.sh handle cmcc,pz-l8 entirely on its
+    # own (insert mode), so that:
+    #   - PR's caldata writing style changes (shared case vs standalone case,
+    #     different offsets, new patch steps) don't break fix-caldata.sh
+    #   - fix-caldata.sh depends only on OpenWrt main's caldata file structure
+    #     (which is much more stable than PR's writing style)
+    #   - CI log shows "Skipped patch '...11-ath11k-caldata'." for observability
+    if ! git diff "origin/$OPENWRT_BRANCH"..."$PR_21495_SHA" \
+            | git apply --3way \
+                --exclude='target/linux/qualcommax/ipq50xx/base-files/etc/hotplug.d/firmware/11-ath11k-caldata'; then
         echo "::warning::git apply encountered conflicts."
         # Find all .rej files
         REJ_FILES=$(git ls-files --others --exclude-standard "*.rej" 2>/dev/null)
