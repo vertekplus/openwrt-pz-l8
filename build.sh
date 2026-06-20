@@ -480,11 +480,17 @@ build_variants() {
         # is the authoritative source of truth.
         # Note: must run AFTER prepare_openwrt + merge_pr_and_fix_caldata +
         # update_feeds, otherwise patch-introduced symbols would false-positive.
-        export KCONFIG_WARN_UNKNOWN_SYMBOLS=1
-        export KCONFIG_WERROR=1
-
+        #
+        # IMPORTANT: pass these env vars ONLY to the defconfig invocation,
+        # do NOT export them globally. Otherwise they leak into target/compile
+        # (kernel build's syncconfig), which then fails because OpenWrt's
+        # defconfig-generated .config contains 'not set' lines for symbols
+        # from other architectures (ARM/X86/PPC) that the aarch64 kernel
+        # symbol table doesn't recognize - 945 false positives, all fatal
+        # under KCONFIG_WERROR.
         DEFCONFIG_LOG="/tmp/defconfig-$VARIANT.log"
-        if ! make defconfig 2>&1 | tee "$DEFCONFIG_LOG"; then
+        if ! env KCONFIG_WARN_UNKNOWN_SYMBOLS=1 KCONFIG_WERROR=1 \
+                make defconfig 2>&1 | tee "$DEFCONFIG_LOG"; then
             echo ""
             echo "::error file=$VARIANT_DIR/build.config::Config validation failed (see kconfig warnings above)"
             echo "Common causes:"
@@ -516,7 +522,8 @@ build_variants() {
         # If the second run changes .config, that indicates unstable config
         # (dependency cycle or incomplete resolution) - treat as error.
         cp .config /tmp/.config-first-pass
-        make defconfig 2>&1 | tee "$DEFCONFIG_LOG"
+        env KCONFIG_WARN_UNKNOWN_SYMBOLS=1 KCONFIG_WERROR=1 \
+            make defconfig 2>&1 | tee "$DEFCONFIG_LOG"
         if ! diff -q /tmp/.config-first-pass .config >/dev/null; then
             echo "::error file=$VARIANT_DIR/build.config::defconfig did not converge (2nd run changed .config)"
             echo "This indicates unstable config - check for dependency conflicts."
