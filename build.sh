@@ -483,7 +483,8 @@ build_variants() {
         export KCONFIG_WARN_UNKNOWN_SYMBOLS=1
         export KCONFIG_WERROR=1
 
-        if ! make defconfig; then
+        DEFCONFIG_LOG="/tmp/defconfig-$VARIANT.log"
+        if ! make defconfig 2>&1 | tee "$DEFCONFIG_LOG"; then
             echo ""
             echo "::error file=$VARIANT_DIR/build.config::Config validation failed (see kconfig warnings above)"
             echo "Common causes:"
@@ -491,6 +492,23 @@ build_variants() {
             echo "  - Package removed/renamed in current OpenWrt/feeds version"
             echo "  - Wrong target/device for this branch"
             echo "  - Invalid value (must be y/m/n/\"string\"/number; first char matters)"
+            echo ""
+            echo "Annotated errors (also visible on PR Files changed page):"
+            # Convert kconfig warnings/errors to GitHub Actions ::error annotations
+            # so they show up inline on the PR diff view.
+            # Format 1: .config:NN:warning: <message>
+            # Format 2: .config:NN: *** <message>  (kconfig parser hard error)
+            # The line number in .config matches build.config (we cp'd it).
+            CI_FILE="$VARIANT_DIR/build.config"
+            while IFS= read -r line; do
+                # Match kconfig warning format: .config:NN:warning: <msg>
+                if [[ "$line" =~ ^\.config:([0-9]+):warning:\ (.+)$ ]]; then
+                    echo "::error file=$CI_FILE,line=${BASH_REMATCH[1]}::${BASH_REMATCH[2]}"
+                # Match kconfig parser error format: .config:NN: *** <msg>
+                elif [[ "$line" =~ ^\.config:([0-9]+):\ \*\*\*\ (.+)$ ]]; then
+                    echo "::error file=$CI_FILE,line=${BASH_REMATCH[1]}::${BASH_REMATCH[2]}"
+                fi
+            done < "$DEFCONFIG_LOG"
             exit 1
         fi
 
@@ -498,7 +516,7 @@ build_variants() {
         # If the second run changes .config, that indicates unstable config
         # (dependency cycle or incomplete resolution) - treat as error.
         cp .config /tmp/.config-first-pass
-        make defconfig
+        make defconfig 2>&1 | tee "$DEFCONFIG_LOG"
         if ! diff -q /tmp/.config-first-pass .config >/dev/null; then
             echo "::error file=$VARIANT_DIR/build.config::defconfig did not converge (2nd run changed .config)"
             echo "This indicates unstable config - check for dependency conflicts."
