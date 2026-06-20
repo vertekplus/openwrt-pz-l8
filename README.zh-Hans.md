@@ -235,10 +235,9 @@ variants/
       99-init-ap                 # 初始化 AP 模式配置（已设主机名或密码则跳过）
   router/
     build.config                # 路由模式：完整构建配置（目标、WiFi、防火墙、完整 LuCI）
-scripts/
-  fix-caldata.sh                # PR #21495 审查反馈的 Caldata 修正脚本
 patches/
-  add-fm25ls01-support.patch    # FM25LS01 SPI NAND 支持（V2 硬件）
+  001-add-fm25ls01-support.patch # FM25LS01 SPI NAND 支持（V2 硬件）
+  002-pz-l8-caldata.patch        # PZ-L8 ath11k caldata 配置（MAC、regdomain、macflag）
 .github/
   workflows/build.yml           # CI 构建工作流（调用 build.sh）
   release-notes.md              # 发布说明模板

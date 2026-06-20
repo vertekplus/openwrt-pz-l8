@@ -235,10 +235,9 @@ variants/
       99-init-ap                 # Initial AP mode config (skip if hostname or password set)
   router/
     build.config                # Router mode: full build config (target, WiFi, firewall, full LuCI)
-scripts/
-  fix-caldata.sh                # Caldata fix for PR #21495 review feedback
 patches/
-  add-fm25ls01-support.patch    # FM25LS01 SPI NAND support for V2 hardware
+  001-add-fm25ls01-support.patch # FM25LS01 SPI NAND support for V2 hardware
+  002-pz-l8-caldata.patch        # PZ-L8 ath11k caldata entries (MAC, regdomain, macflag)
 .github/
   workflows/build.yml           # CI build workflow (calls build.sh)
   release-notes.md              # Release notes template
