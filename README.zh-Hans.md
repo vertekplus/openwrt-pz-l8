@@ -233,6 +233,8 @@ variants/
     build.config                # AP 模式：完整构建配置（目标、WiFi、Mesh、精简 LuCI）
     etc/uci-defaults/
       99-init-ap                 # 初始化 AP 模式配置（已设主机名或密码则跳过）
+    etc/sysctl.d/
+      99-ap-init.conf            # AP 桥接模式 sysctl：接受上游 IPv6 RA
   router/
     build.config                # 路由模式：完整构建配置（目标、WiFi、防火墙、完整 LuCI）
 patches/
