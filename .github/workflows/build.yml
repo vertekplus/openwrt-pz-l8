@@ -306,6 +306,7 @@ jobs:
           build_status=${PIPESTATUS[0]}
           set -e
           if [ "$build_status" -ne 0 ]; then
+            failure_tail=$(tail -n 120 "$RUNNER_TEMP/openwrt-build.log")
             {
               echo "## Build failure tail"
               echo ""
@@ -317,6 +318,10 @@ jobs:
               echo ""
               echo '</details>'
             } >> "$GITHUB_STEP_SUMMARY"
+            failure_tail=${failure_tail//'%'/'%25'}
+            failure_tail=${failure_tail//$'\r'/'%0D'}
+            failure_tail=${failure_tail//$'\n'/'%0A'}
+            echo "::error title=OpenWrt build failure tail::$failure_tail"
           fi
           exit "$build_status"
 
