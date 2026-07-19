@@ -301,7 +301,24 @@ jobs:
             OPENWRT_SHA: ${{ inputs.openwrt_sha }}
         run: |
           chmod +x "$GITHUB_WORKSPACE/build.sh"
-          "$GITHUB_WORKSPACE/build.sh" -c on
+          set +e
+          "$GITHUB_WORKSPACE/build.sh" -c on 2>&1 | tee "$RUNNER_TEMP/openwrt-build.log"
+          build_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$build_status" -ne 0 ]; then
+            {
+              echo "## Build failure tail"
+              echo ""
+              echo '<details><summary>Last 250 log lines</summary>'
+              echo ""
+              echo '```text'
+              tail -n 250 "$RUNNER_TEMP/openwrt-build.log"
+              echo '```'
+              echo ""
+              echo '</details>'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$build_status"
 
       - name: Build summary
         run: |
