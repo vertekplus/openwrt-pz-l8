@@ -1,0 +1,53 @@
+diff --git a/package/network/config/wifi-scripts/files/lib/netifd/netifd-wireless.sh b/package/network/config/wifi-scripts/files/lib/netifd/netifd-wireless.sh
+index 2a658cf..a8d3251 100644
+--- a/package/network/config/wifi-scripts/files/lib/netifd/netifd-wireless.sh
++++ b/package/network/config/wifi-scripts/files/lib/netifd/netifd-wireless.sh
+@@ -267,7 +267,7 @@ wireless_vif_parse_encryption() {
+ 		wpa3*)
+ 			auth_type=eap2
+ 		;;
+-		psk3-mixed*|sae-mixed*)
++		psk3-mixed*|sae-mixed*|sae-compat*)
+ 			auth_type=psk-sae
+ 		;;
+ 		psk3*|sae*)
+diff --git a/package/network/config/wifi-scripts/files-ucode/lib/netifd/wireless/mac80211.sh b/package/network/config/wifi-scripts/files-ucode/lib/netifd/wireless/mac80211.sh
+index 3a1fa69..27226f8 100755
+--- a/package/network/config/wifi-scripts/files-ucode/lib/netifd/wireless/mac80211.sh
++++ b/package/network/config/wifi-scripts/files-ucode/lib/netifd/wireless/mac80211.sh
+@@ -195,5 +195,23 @@ function setup() {
+ 	}
+ 	delete config.hwmode;
+ 
++	if (config.band == '5g' &&
++	    system("grep -qx 'cmcc,pz-l8' /tmp/sysinfo/board_name") == 0) {
++		let requested_htmode = config.htmode;
++		switch (config.htmode) {
++		case 'VHT160':
++			config.htmode = 'VHT80';
++			break;
++		case 'HE160':
++			config.htmode = 'HE80';
++			break;
++		case 'EHT160':
++			config.htmode = 'EHT80';
++			break;
++		}
++		if (config.htmode != requested_htmode)
++			log('PZ-L8 5 GHz does not support stable 160 MHz AP operation; falling back to 80 MHz');
++	}
++
+ 	validate('device', config);
+ 	setup_phy(data.phy, data.config, data.data);
+diff --git a/package/network/config/wifi-scripts/files-ucode/usr/share/ucode/wifi/iface.uc b/package/network/config/wifi-scripts/files-ucode/usr/share/ucode/wifi/iface.uc
+index 690b7f7..52dfa36 100644
+--- a/package/network/config/wifi-scripts/files-ucode/usr/share/ucode/wifi/iface.uc
++++ b/package/network/config/wifi-scripts/files-ucode/usr/share/ucode/wifi/iface.uc
+@@ -62,6 +62,7 @@ export function parse_encryption(config, dev_config) {
+ 
+ 	case 'psk3-mixed':
+ 	case 'sae-mixed':
++	case 'sae-compat':
+ 		config.auth_type = 'psk-sae';
+ 		break;
+ 
