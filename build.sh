@@ -232,7 +232,7 @@ show_info() {
     echo "  Disk available:$(df -h / | awk 'NR==2{print " "$4}')"
     case "$(uname -s)" in
         Darwin) echo "  Memory:$(sysctl -n hw.memsize 2>/dev/null | awk '{printf " %.0f GB", $1/1024/1024/1024}')" ;;
-        *)      echo "  Memory:$(free -h | awk '/^Mem:/{print " "$2} total, "$7" available}')" ;;
+        *)      echo "  Memory:$(free -h | awk '/^Mem:/{printf " %s total, %s available", $2, $7}')" ;;
     esac
     echo ""
 }
